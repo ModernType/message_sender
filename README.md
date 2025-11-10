@@ -24,3 +24,7 @@ Then in the project folder build it with `cargo`:
 ```cargo build --release```
 
 Executable will be located in: `{project_folder}/target/release/message-sender`
+
+Additionally you can compile the app with [skia renderer](https://skia.org/) using `skia` feature:
+
+```cargo build --release --features skia```
