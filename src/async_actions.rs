@@ -22,7 +22,7 @@ pub async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     )
     .await?;
     // Clearing all messages to free space
-    _ = store.clear_messages().await;
+    // _ = store.clear_messages().await;
     Ok(store)
 }
 

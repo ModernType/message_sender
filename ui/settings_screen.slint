@@ -1,0 +1,74 @@
+import { LineEdit, VerticalBox, HorizontalBox, Button } from "std-widgets.slint";
+
+component IpEdit inherits LineEdit {
+    callback check-ip(text: string) -> bool;
+    in-out property <bool> correct: true;
+
+    edited(text) => {
+        correct = check-ip(text)
+    }
+}
+
+export component SettingsScreen {
+    callback check-ip <=> listener-ip.check-ip;
+    callback sync-interval-changed(string);
+    callback back();
+
+    in property <int> sync-interval;
+    in property <string> listener-ip;
+
+    TouchArea {}
+
+    VerticalBox {
+        padding: 10px;
+        spacing: 10px;
+        alignment: start;
+
+        HorizontalBox {
+            Button {
+                icon: @image-url("icons/back.svg");
+                clicked => {
+                    back()
+                }
+                width: self.preferred-width;
+            }
+            Text {
+                text: "Settings";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                font-size: 16px;
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+
+            Text {
+                text: "Listener IP";
+            }
+            listener-ip := IpEdit {
+                text: root.listener-ip;
+            }
+            Text {
+                text: "Reload the app to accept messages on new IP";
+                font-italic: true;
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+
+            Text {
+                text: "Auto sync interval";
+            }
+            LineEdit {
+                text: sync-interval;
+                edited(text) => {
+                    sync-interval-changed(text);
+                }
+            }
+        }
+    }
+
+
+}

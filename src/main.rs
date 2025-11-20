@@ -185,11 +185,9 @@ fn main() {
     app.invoke_start_link();
 
     let mut tx_clone = tx.clone();
-    app.on_sync(move |state| {
-        if state == LinkState::Linked {
-            info!("Sending sync signal");
-            futures::executor::block_on(tx_clone.send(AsyncAction::Sync)).unwrap()
-        }
+    app.on_sync(move || {
+        info!("Sending sync signal");
+        futures::executor::block_on(tx_clone.send(AsyncAction::Sync)).unwrap()
     });
     let mut tx_clone = tx.clone();
     app.on_get_groups(move || {
