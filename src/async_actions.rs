@@ -6,10 +6,7 @@ use futures::{StreamExt, future::Either, pin_mut};
 use image::Rgb;
 use log::{info, warn};
 use presage::{
-    Manager,
-    libsignal_service::{configuration::SignalServers, content::ContentBody},
-    proto::{DataMessage, GroupContextV2},
-    store::ContentsStore,
+    Manager, libsignal_service::{configuration::SignalServers, content::ContentBody}, proto::{DataMessage, GroupContextV2}, store::ContentsStore
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use slint::{ModelRc, SharedPixelBuffer, SharedString, VecModel, Weak};
@@ -17,13 +14,25 @@ use slint::{ModelRc, SharedPixelBuffer, SharedString, VecModel, Weak};
 use crate::{APP_STATE, App, Group};
 
 pub async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
-    SqliteStore::open_with_options(
+    let mut store = SqliteStore::open_with_options(
         SqliteConnectOptions::default()
             .filename("signal_data.db")
             .create_if_missing(true),
         OnNewIdentity::Trust,
     )
-    .await
+    .await?;
+    // Clearing all messages to free space
+    _ = store.clear_messages().await;
+    Ok(store)
+}
+
+async fn update_group_map() {
+    let mut state = APP_STATE.lock().unwrap();
+    let manager = state.manager().unwrap().clone();
+    let group_map = &mut state.cached_groups;
+    for (key, group) in manager.store().groups().await.unwrap().flatten() {
+        group_map.insert(group.title, key);
+    }
 }
 
 pub async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
@@ -32,6 +41,7 @@ pub async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
     match Manager::load_registered(store).await {
         Ok(mng) => {
             APP_STATE.lock().unwrap().set_manager(mng);
+            update_group_map().await;
             app_handle
                 .clone()
                 .upgrade_in_event_loop(move |app| {
@@ -50,20 +60,15 @@ pub async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
                     match Manager::link_secondary_device(
                         store,
                         SignalServers::Production,
-                        "test-sender".to_owned(),
+                        "message-sender".to_owned(),
                         tx,
                     )
                     .await
                     {
                         Ok(mng) => {
                             info!("Has manager");
-                            let mut state = APP_STATE.lock().unwrap();
-                            state.set_manager(mng);
-                            let manager = state.manager().unwrap().clone();
-                            let group_map = &mut state.cached_groups;
-                            for (key, group) in manager.store().groups().await.unwrap().flatten() {
-                                group_map.insert(group.title, key);
-                            }
+                            APP_STATE.lock().unwrap().set_manager(mng);
+                            update_group_map().await;
                             app_handle
                                 .clone()
                                 .upgrade_in_event_loop(|app| {
