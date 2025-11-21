@@ -8,7 +8,7 @@ use std::{
 };
 
 use futures::{SinkExt, StreamExt};
-use log::{info, warn};
+use log::info;
 use presage::{
     Manager,
     manager::Registered,
@@ -17,9 +17,12 @@ use presage_store_sqlite::SqliteStore;
 use serde::{Deserialize, Serialize};
 use simplelog::Config;
 use slint::{SharedString, ToSharedString};
-use tokio::{io::AsyncReadExt, net::TcpListener, task::LocalSet};
+use tokio::task::LocalSet;
+
+use crate::accept_server::start_server_thread;
 
 mod async_actions;
+mod accept_server;
 mod observable;
 #[cfg(test)]
 mod test;
@@ -131,52 +134,7 @@ fn main() {
 
     let tx_clone = tx.clone();
     let app_handle = app.as_weak();
-    let _server_runtime = std::thread::spawn(move || {
-        let mut tx = tx_clone;
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        rt.block_on(async move {
-            let addr = {
-                let state = APP_STATE.lock().unwrap();
-                state.recieve_address
-            };
-            let listener = TcpListener::bind(addr).await.unwrap();
-            loop {
-                info!("Started accepting messages on listener");
-                match listener.accept().await {
-                    Ok((mut stream, addr)) => {
-                        let mut buf = String::new();
-                        match stream.read_to_string(&mut buf).await {
-                            Ok(v) => info!("Read {v} bytes from {addr}"),
-                            Err(e) => {
-                                warn!("{e}");
-                                continue;
-                            }
-                        }
-                        info!("New message: {buf}");
-                        let send = {
-                            let state = APP_STATE.lock().unwrap();
-                            state.autosend
-                        };
-                        if send {
-                            _ = tx.send(AsyncAction::SendMessage(buf)).await;
-                        } else {
-                            _ = app_handle.upgrade_in_event_loop(|app| {
-                                app.invoke_set_message_text(buf.into())
-                            });
-                        }
-                    }
-                    Err(e) => {
-                        warn!("{e}");
-                        break;
-                    }
-                }
-            }
-        });
-    });
+    let _server_runtime = start_server_thread(tx_clone, app_handle);
 
     let mut tx_clone = tx.clone();
     app.on_start_link(move || {

@@ -4,7 +4,7 @@
 - [x] Link to main device with QR-code
 - [x] Sync with secondary device
 - [x] Edit and send messages to selected groups
-- [x] Accept messages sent to the app (via `TcpListener`)
+- [x] Accept messages sent to the app (via ~~`TcpListener`~~ `axum`)
 - [ ] Rich text support (Half baked)
 - [ ] Full Op support
 - [ ] WhatsApp?
