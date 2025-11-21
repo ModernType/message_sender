@@ -1,13 +1,14 @@
-use std::{collections::HashMap, io::Write, net::TcpStream};
+use reqwest::Method;
 
 #[test]
 fn send_test_message() {
     // This constant holds an address to send message to `message_sender`
-    const MESSAGE_SEND_ADDR: &str = "127.0.0.1:8000";
+    const MESSAGE_SEND_ADDR: &str = "http://127.0.0.1:8000";
+    const MESSAGE_BODY: &[u8] = include_bytes!("../test.json");
 
-    let mut stream = TcpStream::connect(MESSAGE_SEND_ADDR).unwrap();
-    let mut map = HashMap::new();
-    map.insert("text", "Test message to send");
-    let json = serde_json::to_string(&map).unwrap();
-    stream.write_all(json.as_bytes()).unwrap();
+    let client = reqwest::blocking::Client::new();
+    client.request(Method::POST, MESSAGE_SEND_ADDR)
+    .body(MESSAGE_BODY)
+    .send()
+    .unwrap();
 }
