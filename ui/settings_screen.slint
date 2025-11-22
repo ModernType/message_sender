@@ -18,11 +18,12 @@ component IpEdit inherits LineEdit {
 
 export component SettingsScreen {
     callback check-ip <=> listener-ip.check-ip;
-    callback sync-interval-changed(string);
+    callback sync-interval-changed(int);
     callback back();
     callback send-mode-change(SendMode);
+    callback sync <=> timer.triggered;
 
-    in property <int> sync-interval;
+    in-out property <int> sync-interval;
     in property <string> listener-ip;
     in property <SendMode> send-mode;
 
@@ -31,6 +32,11 @@ export component SettingsScreen {
         else if send-mode == SendMode.frequency { return 1; }
         else if send-mode == SendMode.debug { return 2; }
         return 0;
+    }
+
+    timer := Timer {
+        interval: sync-interval * 1s;
+        running: sync-interval == 0 ? false : true;
     }
 
     TouchArea {}
@@ -79,8 +85,10 @@ export component SettingsScreen {
             }
             LineEdit {
                 text: sync-interval;
+                input-type: number;
                 edited(text) => {
-                    sync-interval-changed(text);
+                    root.sync-interval = text.to-float();
+                    sync-interval-changed(root.sync-interval);
                 }
             }
         }

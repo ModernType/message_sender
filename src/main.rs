@@ -13,7 +13,7 @@ use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Deserialize, Serialize};
 use simplelog::Config;
-use slint::{SharedString, ToSharedString};
+use slint::{SharedString, Timer, ToSharedString};
 
 use crate::{accept_server::start_server_thread, signal_actions::start_signal_thread};
 use signal_actions::SignalAction;
@@ -41,6 +41,7 @@ struct AppState {
     recieve_address: SocketAddrV4,
     autosend: bool,
     send_mode: SendMode,
+    sync_interval: i32,
 }
 
 impl Default for AppState {
@@ -53,6 +54,7 @@ impl Default for AppState {
             recieve_address: "127.0.0.1:8000".parse().unwrap(),
             autosend: false,
             send_mode: SendMode::Standard,
+            sync_interval: 60,
         }
     }
 }
@@ -151,6 +153,10 @@ fn main() {
         let mut state = APP_STATE.lock().unwrap();
         state.send_mode = mode;
     });
+    app.on_sync_interval_changed(|interval| {
+        let mut state = APP_STATE.lock().unwrap();
+        state.sync_interval = interval;
+    });
 
     // Set initial ip address in field from save. Use scope to automatically drop MutexGuard
     {
@@ -159,6 +165,7 @@ fn main() {
         app.set_listener_ip(ip);
         app.set_autosend(state.autosend);
         app.set_send_mode(state.send_mode);
+        app.set_sync_interval(state.sync_interval);
     }
 
     _ = app.run();

@@ -17,16 +17,18 @@ export component App inherits Window {
     in property <bool> autosend;
     property <Screen> screen: Screen.main;
     in property <SendMode> send-mode;
+    in property <int> sync-interval;
 
     // To native code
     callback start-link <=> main-scr.start-link;
-    callback sync <=> main-scr.sync;
+    callback sync();
     callback get-groups <=> main-scr.get-groups;
     callback group-edited <=> main-scr.group-edited;
     callback send-message <=> main-scr.send-message;
     callback autosend-change <=> main-scr.autosend-change;
     callback check-ip-correct <=> sett-scr.check-ip;
     callback send-mode-change <=> sett-scr.send-mode-change;
+    callback sync-interval-changed <=> sett-scr.sync-interval-changed;
 
     // From native code
     callback set-qr <=> main-scr.set-qr;
@@ -44,6 +46,9 @@ export component App inherits Window {
         settings => {
             root.screen = Screen.settings;
         }
+        sync => {
+            root.sync();
+        }
         
         animate x {
              duration: 150ms;
@@ -54,11 +59,15 @@ export component App inherits Window {
     sett-scr := SettingsScreen {
         listener-ip: root.listener-ip;
         send-mode: root.send-mode;
+        sync-interval: root.sync-interval;
 
         width: 100%;
         height: 100%;
         back => {
             root.screen = Screen.main;
+        }
+        sync => {
+            root.sync();
         }
 
         animate x {
