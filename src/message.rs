@@ -38,9 +38,9 @@ pub struct MessageInner<'a> {
     title: &'a str,
 }
 
-impl<'a> MessageInner<'a> {
-    fn with_frequency(&self) -> String {
-        format!("{}\n{}", self.frequency, self)
+impl<'a> Message<'a> {
+    pub fn with_frequency(&self) -> String {
+        format!("{}\n{}", self.0.frequency, self)
     }
 }
 

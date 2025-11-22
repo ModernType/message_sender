@@ -2,8 +2,8 @@
 
 use std::{net::SocketAddrV4, sync::OnceLock};
 
-use crate::{APP_STATE, signal_actions::SignalAction};
-use axum::{Router, response::IntoResponse, routing::post};
+use crate::{APP_STATE, SendMode, message::Message, signal_actions::SignalAction};
+use axum::{Router, http::StatusCode, response::IntoResponse, routing::post};
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use log::info;
 use slint::Weak;
@@ -32,21 +32,42 @@ impl HandleContainer {
     // }
 
     pub async fn message_post(mut self, message: String) -> impl IntoResponse {
-        let send = {
+        let (autosend, send_mode) = {
             let state = APP_STATE.lock().unwrap();
-            state.autosend
+            (state.autosend, state.send_mode)
         };
-        if send {
-            _ = self
-                .action_send
-                .send(SignalAction::SendMessage(message))
-                .await;
-        } else {
-            _ = self
-                .app_handle
-                .upgrade_in_event_loop(|app| app.invoke_set_message_text(message.into()));
+        let messages = match send_mode {
+            SendMode::Standard => {
+                match serde_json::from_str::<Vec<Message>>(&message) {
+                    Ok(messages) => messages.iter().map(Message::to_string).collect(),
+                    Err(e) => return (StatusCode::BAD_REQUEST, e.to_string())
+                }
+            },
+            SendMode::Frequency => {
+                match serde_json::from_str::<Vec<Message>>(&message) {
+                    Ok(messages) => messages.iter().map(Message::with_frequency).collect(),
+                    Err(e) => return (StatusCode::BAD_REQUEST, e.to_string())
+                }
+            }
+            SendMode::Debug => {
+                vec![message]
+            }
+        };
+        if autosend {
+            for message in messages {
+                _ = self
+                    .action_send
+                    .send(SignalAction::SendMessage(message))
+                    .await;
+            }
         }
-        "Recieved"
+        else {
+            let message = messages.join("\n");
+            _ = self
+            .app_handle
+            .upgrade_in_event_loop(|app| app.invoke_set_message_text(message.into()));
+        }
+        (StatusCode::OK, "Recieved".to_owned())
     }
 }
 
@@ -59,7 +80,7 @@ pub fn start_server_thread(
     std::thread::spawn(|| {
         HANDLES.get_or_init(move || HandleContainer::new(action_send, app_handle));
 
-        let rt = tokio::runtime::Builder::new_multi_thread()
+        let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();

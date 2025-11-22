@@ -244,7 +244,7 @@ async fn send_message(message: String) -> anyhow::Result<()> {
         .as_millis() as u64;
     for key in key_iter {
         let message = message.clone();
-        tokio::task::spawn_local(async move {
+        async move {
             let message = DataMessage {
                 body: Some(message),
                 timestamp: Some(timestamp),
@@ -283,17 +283,19 @@ async fn send_message(message: String) -> anyhow::Result<()> {
                 match futures::future::select(send, timeout).await {
                     Either::Left((send_res, _)) => {
                         match send_res {
-                            Ok(_) => info!("Message sent!"),
+                            Ok(_) => {
+                                info!("Message sent!");
+                                break;
+                            },
                             Err(e) => warn!("Message send error: {e}"),
                         }
-                        break;
                     }
                     _ => {
                         info!("Retrying to send the message...")
                     }
                 }
             }
-        });
+        }.await;
     }
 
     Ok(())

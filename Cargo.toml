@@ -33,7 +33,6 @@ features = [
 version = "1.48.0"
 features = [
     "rt",
-    "rt-multi-thread",
     "net",
     "io-std",
     "time",

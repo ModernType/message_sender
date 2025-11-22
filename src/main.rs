@@ -13,7 +13,7 @@ use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Deserialize, Serialize};
 use simplelog::Config;
-use slint::{SharedString, Timer, ToSharedString};
+use slint::{SharedString, ToSharedString};
 
 use crate::{accept_server::start_server_thread, signal_actions::start_signal_thread};
 use signal_actions::SignalAction;
