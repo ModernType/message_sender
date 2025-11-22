@@ -39,6 +39,7 @@ enum AsyncAction {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
 struct AppState {
     #[serde(skip)]
     manager: Option<Manager<SqliteStore, Registered>>,
@@ -50,6 +51,7 @@ struct AppState {
     group_active: HashMap<SharedString, bool>,
     recieve_address: SocketAddrV4,
     autosend: bool,
+    send_mode: SendMode,
 }
 
 impl Default for AppState {
@@ -61,6 +63,7 @@ impl Default for AppState {
             group_active: HashMap::new(),
             recieve_address: "127.0.0.1:8000".parse().unwrap(),
             autosend: false,
+            send_mode: SendMode::Standard,
         }
     }
 }
@@ -175,6 +178,10 @@ fn main() {
         let mut state = APP_STATE.lock().unwrap();
         state.autosend = check;
     });
+    app.on_send_mode_change(|mode| {
+        let mut state = APP_STATE.lock().unwrap();
+        state.send_mode = mode;
+    });
 
     // Set initial ip address in field from save. Use scope to automatically drop MutexGuard
     {
@@ -182,6 +189,7 @@ fn main() {
         let ip = state.recieve_address.to_shared_string();
         app.set_listener_ip(ip);
         app.set_autosend(state.autosend);
+        app.set_send_mode(state.send_mode);
     }
 
     _ = app.run();

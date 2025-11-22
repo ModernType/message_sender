@@ -1,4 +1,11 @@
-import { LineEdit, VerticalBox, HorizontalBox, Button } from "std-widgets.slint";
+import { LineEdit, VerticalBox, HorizontalBox, Button, ComboBox } from "std-widgets.slint";
+
+@rust-attr(derive(serde::Serialize, serde::Deserialize))
+export enum SendMode {
+    standard,
+    frequency,
+    debug,
+}
 
 component IpEdit inherits LineEdit {
     callback check-ip(text: string) -> bool;
@@ -13,9 +20,18 @@ export component SettingsScreen {
     callback check-ip <=> listener-ip.check-ip;
     callback sync-interval-changed(string);
     callback back();
+    callback send-mode-change(SendMode);
 
     in property <int> sync-interval;
     in property <string> listener-ip;
+    in property <SendMode> send-mode;
+
+    function num-send-mode(mode: SendMode) -> int {
+        if send-mode == SendMode.standard { return 0; }
+        else if send-mode == SendMode.frequency { return 1; }
+        else if send-mode == SendMode.debug { return 2; }
+        return 0;
+    }
 
     TouchArea {}
 
@@ -68,7 +84,32 @@ export component SettingsScreen {
                 }
             }
         }
+
+        VerticalLayout {
+            spacing: 2px;
+
+            Text {
+                text: "Message send mode";
+            }
+            ComboBox {
+                current-index: num-send-mode(root.send-mode);
+                model: [
+                    "Standard",
+                    "Frequency",
+                    "Debug",
+                ];
+                selected(current-value) => {
+                    if self.current-index == 0 {
+                        root.send-mode-change(SendMode.standard);
+                    }
+                    else if self.current-index == 1 {
+                        root.send-mode-change(SendMode.frequency);
+                    }
+                    else if self.current-index == 2 {
+                        root.send-mode-change(SendMode.debug);
+                    }
+                }
+            }
+        }
     }
-
-
 }
