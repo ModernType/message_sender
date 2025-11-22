@@ -1,5 +1,7 @@
 use reqwest::Method;
 
+use crate::message::Message;
+
 #[test]
 fn send_test_message() {
     // This constant holds an address to send message to `message_sender`
@@ -11,4 +13,14 @@ fn send_test_message() {
     .body(MESSAGE_BODY)
     .send()
     .unwrap();
+}
+
+#[test]
+fn deserialize_messages() {
+    const MESSAGES: &str = include_str!("../test.json");
+
+    let messages: Vec<Message> = serde_json::from_str(MESSAGES).unwrap();
+    for m in messages {
+        println!("{m}");
+    }
 }

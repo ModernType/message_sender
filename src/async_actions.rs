@@ -1,12 +1,16 @@
 use std::{
-    rc::Rc, time::{Duration, SystemTime}
+    rc::Rc,
+    time::{Duration, SystemTime},
 };
 
 use futures::{StreamExt, future::Either, pin_mut};
 use image::Rgb;
 use log::{info, warn};
 use presage::{
-    Manager, libsignal_service::{configuration::SignalServers, content::ContentBody}, proto::{DataMessage, GroupContextV2}, store::ContentsStore
+    Manager,
+    libsignal_service::{configuration::SignalServers, content::ContentBody},
+    proto::{DataMessage, GroupContextV2},
+    store::ContentsStore,
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use slint::{ModelRc, SharedPixelBuffer, SharedString, VecModel, Weak};
@@ -225,8 +229,7 @@ pub async fn send_message(message: String) -> anyhow::Result<()> {
             // We setup this loop to continuosly try to send message with given timeout
             loop {
                 let timeout = tokio::time::sleep(Duration::from_millis(5000));
-                let send = manager
-                .send_message_to_group(
+                let send = manager.send_message_to_group(
                     key.as_slice(),
                     ContentBody::DataMessage(message.clone()),
                     timestamp.into(),
@@ -240,7 +243,7 @@ pub async fn send_message(message: String) -> anyhow::Result<()> {
                             Err(e) => warn!("Message send error: {e}"),
                         }
                         break;
-                    },
+                    }
                     _ => {
                         info!("Retrying to send the message...")
                     }

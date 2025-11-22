@@ -15,6 +15,7 @@ serde = {version = "1.0.228", features = ["derive"]}
 serde_json = "1.0.145"
 anyhow = "1.0.100"
 axum = "0.8.7"
+derive_more = { version = "2.0.1", features = ["display"] }
 
 [dependencies.slint]
 version = "1.14.1"

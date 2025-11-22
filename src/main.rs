@@ -24,6 +24,7 @@ use crate::accept_server::start_server_thread;
 mod async_actions;
 mod accept_server;
 mod observable;
+mod message;
 #[cfg(test)]
 mod test;
 
