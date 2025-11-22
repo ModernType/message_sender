@@ -9,10 +9,11 @@ fn send_test_message() {
     const MESSAGE_BODY: &[u8] = include_bytes!("../test.json");
 
     let client = reqwest::blocking::Client::new();
-    client.request(Method::POST, MESSAGE_SEND_ADDR)
-    .body(MESSAGE_BODY)
-    .send()
-    .unwrap();
+    client
+        .request(Method::POST, MESSAGE_SEND_ADDR)
+        .body(MESSAGE_BODY)
+        .send()
+        .unwrap();
 }
 
 #[test]

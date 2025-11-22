@@ -2,25 +2,28 @@
 
 use std::{net::SocketAddrV4, sync::OnceLock};
 
+use crate::{APP_STATE, signal_actions::SignalAction};
 use axum::{Router, response::IntoResponse, routing::post};
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use log::info;
 use slint::Weak;
 use tokio::net::TcpListener;
-use crate::{APP_STATE, AsyncAction};
 
 #[derive(Clone)]
 struct HandleContainer {
-    action_send: UnboundedSender<AsyncAction>,
+    action_send: UnboundedSender<SignalAction>,
     app_handle: Weak<crate::App>,
 }
 
 impl HandleContainer {
-    pub fn new(action_send: UnboundedSender<AsyncAction>, app_handle: Weak<crate::App>) -> Self {
-        Self { action_send, app_handle }
+    pub fn new(action_send: UnboundedSender<SignalAction>, app_handle: Weak<crate::App>) -> Self {
+        Self {
+            action_send,
+            app_handle,
+        }
     }
 
-    // pub fn sender(&self) -> UnboundedSender<AsyncAction> {
+    // pub fn sender(&self) -> UnboundedSender<SignalAction> {
     //     self.action_send.clone()
     // }
 
@@ -34,11 +37,14 @@ impl HandleContainer {
             state.autosend
         };
         if send {
-            _ = self.action_send.send(AsyncAction::SendMessage(message)).await;
+            _ = self
+                .action_send
+                .send(SignalAction::SendMessage(message))
+                .await;
         } else {
-            _ = self.app_handle.upgrade_in_event_loop(|app| {
-                app.invoke_set_message_text(message.into())
-            });
+            _ = self
+                .app_handle
+                .upgrade_in_event_loop(|app| app.invoke_set_message_text(message.into()));
         }
         "Recieved"
     }
@@ -46,14 +52,17 @@ impl HandleContainer {
 
 static HANDLES: OnceLock<HandleContainer> = OnceLock::new();
 
-pub fn start_server_thread(action_send: UnboundedSender<AsyncAction>, app_handle: Weak<crate::App>) -> std::thread::JoinHandle<()> {
+pub fn start_server_thread(
+    action_send: UnboundedSender<SignalAction>,
+    app_handle: Weak<crate::App>,
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(|| {
         HANDLES.get_or_init(move || HandleContainer::new(action_send, app_handle));
 
         let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap();
+            .enable_all()
+            .build()
+            .unwrap();
         let listener_addr = {
             let state = APP_STATE.lock().unwrap();
             state.recieve_address
@@ -68,17 +77,14 @@ pub fn start_server_thread(action_send: UnboundedSender<AsyncAction>, app_handle
     })
 }
 
-
 async fn start_server(addr: SocketAddrV4) -> anyhow::Result<()> {
     let listener = TcpListener::bind(addr).await?;
 
-    let router = Router::new()
-        .route("/", post(message_post));
+    let router = Router::new().route("/", post(message_post));
 
     axum::serve(listener, router).await?;
     Ok(())
 }
-
 
 async fn message_post(body: String) -> impl IntoResponse {
     HANDLES.get().unwrap().clone().message_post(body).await

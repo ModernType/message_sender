@@ -3,7 +3,12 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use futures::{StreamExt, future::Either, pin_mut};
+use futures::{
+    StreamExt,
+    channel::mpsc::UnboundedReceiver,
+    future::Either,
+    pin_mut,
+};
 use image::Rgb;
 use log::{info, warn};
 use presage::{
@@ -14,11 +19,51 @@ use presage::{
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use slint::{ModelRc, SharedPixelBuffer, SharedString, VecModel, Weak};
+use tokio::task::LocalSet;
 
 use crate::{APP_STATE, App, Group};
 
-pub async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
-    let mut store = SqliteStore::open_with_options(
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum SignalAction {
+    LinkBegin,
+    Sync,
+    GetGroups,
+    SendMessage(String),
+}
+
+pub fn start_signal_thread(
+    app_handle: Weak<App>,
+    mut rx: UnboundedReceiver<SignalAction>,
+) -> std::thread::JoinHandle<()> {
+    let runtime_builder = std::thread::Builder::new().stack_size(32 * 1024 * 1024);
+    runtime_builder
+        .spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("None runtimes shall be constructed before");
+            let local = LocalSet::new();
+            local.spawn_local(async move {
+                while let Some(action) = rx.next().await {
+                    let app_loop = app_handle.clone();
+                    _ = match action {
+                        SignalAction::LinkBegin => tokio::task::spawn_local(link(app_loop)),
+                        SignalAction::Sync => tokio::task::spawn_local(sync(app_loop)),
+                        SignalAction::GetGroups => tokio::task::spawn_local(get_groups(app_loop)),
+                        SignalAction::SendMessage(message) => {
+                            tokio::task::spawn_local(send_message(message))
+                        }
+                    };
+                }
+            });
+
+            rt.block_on(local)
+        })
+        .expect("Failed to initiate Signal worker thread")
+}
+
+async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
+    let store = SqliteStore::open_with_options(
         SqliteConnectOptions::default()
             .filename("signal_data.db")
             .create_if_missing(true),
@@ -39,7 +84,7 @@ async fn update_group_map() {
     }
 }
 
-pub async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
+async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
     let store = get_store().await?;
     info!("Registering from store");
     match Manager::load_registered(store).await {
@@ -117,7 +162,7 @@ pub async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn sync(app_handle: Weak<App>) -> anyhow::Result<()> {
+async fn sync(app_handle: Weak<App>) -> anyhow::Result<()> {
     let state = APP_STATE.lock().unwrap();
     let mut manager = state.manager().unwrap().clone();
     drop(state);
@@ -153,7 +198,7 @@ pub async fn sync(app_handle: Weak<App>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
+async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
     let state = APP_STATE.lock().unwrap();
     let mut groups = state
         .cached_groups
@@ -181,7 +226,7 @@ pub async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn send_message(message: String) -> anyhow::Result<()> {
+async fn send_message(message: String) -> anyhow::Result<()> {
     let state = APP_STATE.lock().unwrap();
     let key_iter = state
         .group_active
@@ -197,7 +242,6 @@ pub async fn send_message(message: String) -> anyhow::Result<()> {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    // let local = LocalSet::new();
     for key in key_iter {
         let message = message.clone();
         tokio::task::spawn_local(async move {
@@ -225,7 +269,7 @@ pub async fn send_message(message: String) -> anyhow::Result<()> {
                     None => return,
                 }
             };
-
+            
             // We setup this loop to continuosly try to send message with given timeout
             loop {
                 let timeout = tokio::time::sleep(Duration::from_millis(5000));
@@ -252,6 +296,5 @@ pub async fn send_message(message: String) -> anyhow::Result<()> {
         });
     }
 
-    // local.await;
     Ok(())
 }

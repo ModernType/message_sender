@@ -7,36 +7,25 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
 use log::info;
-use presage::{
-    Manager,
-    manager::Registered,
-};
+use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Deserialize, Serialize};
 use simplelog::Config;
 use slint::{SharedString, ToSharedString};
-use tokio::task::LocalSet;
 
-use crate::accept_server::start_server_thread;
+use crate::{accept_server::start_server_thread, signal_actions::start_signal_thread};
+use signal_actions::SignalAction;
 
-mod async_actions;
 mod accept_server;
-mod observable;
 mod message;
+mod observable;
+mod signal_actions;
 #[cfg(test)]
 mod test;
 
 slint::include_modules!();
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-enum AsyncAction {
-    LinkBegin,
-    Sync,
-    GetGroups,
-    SendMessage(String),
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -111,30 +100,10 @@ fn main() {
     .unwrap();
     let app = App::new().unwrap();
 
-    let (tx, mut rx) = futures::channel::mpsc::unbounded::<AsyncAction>();
+    let (tx, rx) = futures::channel::mpsc::unbounded::<SignalAction>();
 
     let app_handle = app.as_weak();
-    let runtime_builder = std::thread::Builder::new().stack_size(32 * 1024 * 1024);
-    let _runtime_thread = runtime_builder.spawn(move || {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        runtime.block_on(async move {
-            while let Some(action) = rx.next().await {
-                let local = LocalSet::new();
-                let app_loop = app_handle.clone();
-                _ = match action {
-                    AsyncAction::LinkBegin => local.spawn_local(async_actions::link(app_loop)),
-                    AsyncAction::Sync => local.spawn_local(async_actions::sync(app_loop)),
-                    AsyncAction::GetGroups => local.spawn_local(async_actions::get_groups(app_loop)),
-                    AsyncAction::SendMessage(message) => local.spawn_local(async_actions::send_message(message)),
-                };
-                local.await
-            }
-        });
-    });
+    let _runtime_thread = start_signal_thread(app_handle, rx);
 
     let tx_clone = tx.clone();
     let app_handle = app.as_weak();
@@ -142,19 +111,19 @@ fn main() {
 
     let mut tx_clone = tx.clone();
     app.on_start_link(move || {
-        futures::executor::block_on(tx_clone.send(AsyncAction::LinkBegin)).unwrap()
+        futures::executor::block_on(tx_clone.send(SignalAction::LinkBegin)).unwrap()
     });
     app.invoke_start_link();
 
     let mut tx_clone = tx.clone();
     app.on_sync(move || {
         info!("Sending sync signal");
-        futures::executor::block_on(tx_clone.send(AsyncAction::Sync)).unwrap()
+        futures::executor::block_on(tx_clone.send(SignalAction::Sync)).unwrap()
     });
     let mut tx_clone = tx.clone();
     app.on_get_groups(move || {
         info!("Sending get_groups signal");
-        futures::executor::block_on(tx_clone.send(AsyncAction::GetGroups)).unwrap()
+        futures::executor::block_on(tx_clone.send(SignalAction::GetGroups)).unwrap()
     });
     app.on_group_edited(|group, state| {
         let mut app_state = APP_STATE.lock().unwrap();
@@ -163,7 +132,7 @@ fn main() {
     let mut tx_clone = tx.clone();
     app.on_send_message(move |message| {
         info!("Sending send_message signal");
-        futures::executor::block_on(tx_clone.send(AsyncAction::SendMessage(message.to_string())))
+        futures::executor::block_on(tx_clone.send(SignalAction::SendMessage(message.to_string())))
             .unwrap()
     });
     app.on_check_ip_correct(|text| match SocketAddrV4::from_str(text.as_str()) {
