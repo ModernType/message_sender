@@ -31,6 +31,7 @@ export component MainScreen {
     
     callback set-qr(image);
     set-qr(qr) => {
+        debug("Called `set-qr`");
         link-state = LinkState.qr;
         qr_code = qr;
     }
@@ -55,7 +56,7 @@ export component MainScreen {
         spacing: 10px;
 
         VerticalBox {
-            // alignment: start;
+            alignment: start;
             spacing: 20px;
             max-width: 250px;
 
@@ -111,7 +112,7 @@ export component MainScreen {
                 horizontal-alignment: center;
             }
             
-            ScrollView {
+            if link-state == LinkState.linked: ScrollView {
                 viewport-width: self.width;
                 viewport-height: groups.length * (10px + 29px) - 10px;
                 // width: 100%;
