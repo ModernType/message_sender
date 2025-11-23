@@ -5,7 +5,7 @@ use std::{net::SocketAddrV4, sync::OnceLock};
 use crate::{app_state::APP_STATE, SendMode, message::Message, signal_actions::SignalAction};
 use axum::{Router, http::StatusCode, response::IntoResponse, routing::post};
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use log::info;
+use log::{info, warn};
 use slint::Weak;
 use tokio::net::TcpListener;
 
@@ -40,7 +40,10 @@ impl HandleContainer {
             SendMode::Standard => {
                 match serde_json::from_str::<Vec<Message>>(&message) {
                     Ok(messages) => messages.iter().map(Message::to_string).collect(),
-                    Err(e) => return (StatusCode::BAD_REQUEST, e.to_string())
+                    Err(e) => {
+                        log::error!("Error to parse messages: {}", &e);
+                        return (StatusCode::BAD_REQUEST, e.to_string())
+                    }
                 }
             },
             SendMode::Frequency => {
@@ -92,17 +95,19 @@ pub fn start_server_thread(
         rt.block_on(async move {
             match start_server(listener_addr).await {
                 Ok(_) => info!("Message server finished successfuly"),
-                Err(e) => log::error!("Message server error: {e}"),
+                Err(e) => panic!("Message server error: {e}"),
             }
         });
     })
 }
 
 async fn start_server(addr: SocketAddrV4) -> anyhow::Result<()> {
+    info!("Binding on addr {}", &addr);
     let listener = TcpListener::bind(addr).await?;
 
     let router = Router::new().route("/", post(message_post));
 
+    info!("Starting serving");
     axum::serve(listener, router).await?;
     Ok(())
 }
