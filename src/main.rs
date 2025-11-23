@@ -1,92 +1,29 @@
 use std::{
-    collections::HashMap,
-    fmt::Debug,
-    fs::{File, OpenOptions},
+    fs::File,
     net::SocketAddrV4,
     str::FromStr,
-    sync::{LazyLock, Mutex},
+    time::Duration,
 };
 
 use futures::SinkExt;
 use log::info;
-use presage::{Manager, manager::Registered};
-use presage_store_sqlite::SqliteStore;
-use serde::{Deserialize, Serialize};
 use simplelog::Config;
-use slint::{SharedString, ToSharedString};
+use slint::{Timer, ToSharedString};
 
 use crate::{accept_server::start_server_thread, signal_actions::start_signal_thread};
 use signal_actions::SignalAction;
+use app_state::APP_STATE;
 
 mod accept_server;
 mod message;
 mod observable;
 mod signal_actions;
+mod app_state;
 #[cfg(test)]
 mod test;
 
 slint::include_modules!();
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(default)]
-struct AppState {
-    #[serde(skip)]
-    manager: Option<Manager<SqliteStore, Registered>>,
-    #[serde(skip)]
-    cached_groups: HashMap<String, [u8; 32]>,
-    #[serde(skip)]
-    #[allow(dead_code)]
-    error_queue: Vec<String>,
-    group_active: HashMap<SharedString, bool>,
-    recieve_address: SocketAddrV4,
-    autosend: bool,
-    send_mode: SendMode,
-    sync_interval: i32,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            manager: None,
-            error_queue: Vec::new(),
-            cached_groups: HashMap::new(),
-            group_active: HashMap::new(),
-            recieve_address: "127.0.0.1:8000".parse().unwrap(),
-            autosend: false,
-            send_mode: SendMode::Standard,
-            sync_interval: 60,
-        }
-    }
-}
-
-impl AppState {
-    pub fn set_manager(&mut self, manager: Manager<SqliteStore, Registered>) {
-        self.manager = Some(manager);
-    }
-
-    pub fn manager(&self) -> Option<&Manager<SqliteStore, Registered>> {
-        self.manager.as_ref()
-    }
-
-    pub fn load() -> anyhow::Result<Self> {
-        let data = File::open("data.json")?;
-        let state = serde_json::from_reader(data)?;
-        Ok(state)
-    }
-
-    pub fn save(&self) -> anyhow::Result<()> {
-        let config_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("data.json")?;
-        serde_json::to_writer_pretty(config_file, self)?;
-        Ok(())
-    }
-}
-
-static APP_STATE: LazyLock<Mutex<AppState>> =
-    LazyLock::new(|| Mutex::new(AppState::load().unwrap_or_default()));
 
 fn main() {
     let log_file = File::create("sender.log").unwrap();
@@ -101,6 +38,15 @@ fn main() {
     ])
     .unwrap();
     let app = App::new().unwrap();
+
+    // Setup snackbar callbacks
+    let app_weak = app.as_weak();
+    let timer = Timer::default();
+    app.on_report_close_prepare(move |dur| {
+        let app_weak = app_weak.clone();
+        let dur = Duration::from_millis(dur as u64);
+        timer.start(slint::TimerMode::SingleShot, dur, move || app_weak.unwrap().invoke_report_close());
+    });
 
     let (tx, rx) = futures::channel::mpsc::unbounded::<SignalAction>();
 

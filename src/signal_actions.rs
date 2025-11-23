@@ -18,10 +18,10 @@ use presage::{
     store::ContentsStore,
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
-use slint::{ModelRc, SharedPixelBuffer, SharedString, VecModel, Weak};
+use slint::{ModelRc, SharedPixelBuffer, SharedString, ToSharedString, VecModel, Weak};
 use tokio::task::LocalSet;
 
-use crate::{APP_STATE, App, Group};
+use crate::{app_state::APP_STATE, App, Group};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum SignalAction {
@@ -50,9 +50,7 @@ pub fn start_signal_thread(
                         SignalAction::LinkBegin => tokio::task::spawn_local(link(app_loop)),
                         SignalAction::Sync => tokio::task::spawn_local(sync(app_loop)),
                         SignalAction::GetGroups => tokio::task::spawn_local(get_groups(app_loop)),
-                        SignalAction::SendMessage(message) => {
-                            tokio::task::spawn_local(send_message(message))
-                        }
+                        SignalAction::SendMessage(message) => tokio::task::spawn_local(send_message(message, app_loop))
                     };
                 }
             });
@@ -226,7 +224,7 @@ async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn send_message(message: String) -> anyhow::Result<()> {
+async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<()> {
     let state = APP_STATE.lock().unwrap();
     let key_iter = state
         .group_active
@@ -243,6 +241,7 @@ async fn send_message(message: String) -> anyhow::Result<()> {
         .unwrap()
         .as_millis() as u64;
     for key in key_iter {
+        let app_handle = app_handle.clone();
         let message = message.clone();
         async move {
             let message = DataMessage {
@@ -284,14 +283,14 @@ async fn send_message(message: String) -> anyhow::Result<()> {
                     Either::Left((send_res, _)) => {
                         match send_res {
                             Ok(_) => {
-                                info!("Message sent!");
+                                _ = app_handle.upgrade_in_event_loop(|app| app.invoke_report("Повідомлення надіслано".to_shared_string()));
                                 break;
                             },
-                            Err(e) => warn!("Message send error: {e}"),
+                            Err(e) => { _ = app_handle.upgrade_in_event_loop(move |app| app.invoke_report(slint::format!("Помилка відправки, повтор: {e}"))); },
                         }
                     }
                     _ => {
-                        info!("Retrying to send the message...")
+                        _ = app_handle.upgrade_in_event_loop(|app| app.invoke_report("Повтор відправки повідомлення...".to_shared_string()));
                     }
                 }
             }

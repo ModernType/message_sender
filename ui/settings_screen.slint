@@ -49,16 +49,17 @@ export component SettingsScreen {
         HorizontalBox {
             Button {
                 icon: @image-url("icons/back.svg");
+                colorize-icon: true;
                 clicked => {
                     back()
                 }
                 width: self.preferred-width;
             }
             Text {
-                text: "Settings";
+                text: "Налаштування";
                 horizontal-alignment: center;
                 vertical-alignment: center;
-                font-size: 16px;
+                font-size: 18px;
             }
         }
 
@@ -66,13 +67,13 @@ export component SettingsScreen {
             spacing: 2px;
 
             Text {
-                text: "Listener IP";
+                text: "IP-адреса прийому повідомлень";
             }
             listener-ip := IpEdit {
                 text: root.listener-ip;
             }
             Text {
-                text: "Reload the app to accept messages on new IP";
+                text: "Щоб зміни цього параметру вступили у силу потрібно перезавантажити програму";
                 font-italic: true;
             }
         }
@@ -81,7 +82,7 @@ export component SettingsScreen {
             spacing: 2px;
 
             Text {
-                text: "Auto sync interval";
+                text: "Інтервал автоматичної синхронізації, с";
             }
             LineEdit {
                 text: sync-interval;
@@ -97,13 +98,13 @@ export component SettingsScreen {
             spacing: 2px;
 
             Text {
-                text: "Message send mode";
+                text: "Режим відправки повідомлень";
             }
             ComboBox {
                 current-index: num-send-mode(root.send-mode);
                 model: [
-                    "Standard",
-                    "Frequency",
+                    "Стандартний",
+                    "З частотою",
                     "Debug",
                 ];
                 selected(current-value) => {

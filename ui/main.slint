@@ -1,4 +1,4 @@
-import { AboutSlint, VerticalBox, HorizontalBox, Button, CheckBox, TextEdit, LineEdit } from "std-widgets.slint";
+import { AboutSlint, VerticalBox, HorizontalBox, Button, CheckBox, TextEdit, LineEdit, Palette } from "std-widgets.slint";
 import { MainScreen, LinkState, Group } from "main_screen.slint";
 import { SettingsScreen, SendMode } from "settings_screen.slint";
 
@@ -7,8 +7,36 @@ enum Screen {
     settings,
 }
 
+component SnackBar {
+    in-out property <bool> opened: false;
+    in property <duration> show-time: 2s;
+    in property <brush> text-color: Palette.foreground;
+    in-out property <string> text: "Test text";
+    height: 50px;
+
+    Rectangle {
+        y: root.opened ? 0 : root.height;
+        height: root.height - 8px;
+        width: root.width - 8px;
+        border-radius: 10px;
+        background: Palette.background.brighter(0.3);
+        Text {
+            text: root.text;
+            color: root.text-color;
+            // font-size: root.height / 2.5;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            overflow: elide;
+            width: root.width - 20px;
+        }
+        animate y {
+            duration: 150ms;
+        }
+    }
+}
+
 export component App inherits Window {
-    title: "Message Sender";
+    title: "Modern Sender";
     preferred-height: 600px;
     preferred-width: 800px;
 
@@ -18,6 +46,12 @@ export component App inherits Window {
     property <Screen> screen: Screen.main;
     in property <SendMode> send-mode;
     in property <int> sync-interval;
+
+    callback autosync();
+    autosync => {
+        sync();
+        main-scr.is-syncing = true;
+    }
 
     // To native code
     callback start-link <=> main-scr.start-link;
@@ -35,6 +69,20 @@ export component App inherits Window {
     callback linked <=> main-scr.linked;
     callback synced <=> main-scr.synced;
     callback set-message-text <=> main-scr.set-message-text;
+
+    // Callbacks for snackbar
+    in-out property <bool> notif-open: snackbar.opened;
+    callback report(string);
+    report(text) => {
+        snackbar.text = text;
+        snackbar.opened = true;
+        report-close-prepare(snackbar.show-time);
+    }
+    callback report-close-prepare(duration);
+    callback report-close();
+    report-close => {
+        snackbar.opened = false;
+    }
 
     // Actual UI
     main-scr := MainScreen {
@@ -67,7 +115,7 @@ export component App inherits Window {
             root.screen = Screen.main;
         }
         sync => {
-            root.sync();
+            root.autosync();
         }
 
         animate x {
@@ -86,4 +134,10 @@ export component App inherits Window {
             sett-scr.x: 0;
         }
     ]
+
+    snackbar := SnackBar {
+        width: root.width;
+        x: 0;
+        y: root.height - self.height;
+    }
 }

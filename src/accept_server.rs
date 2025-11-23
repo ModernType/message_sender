@@ -2,7 +2,7 @@
 
 use std::{net::SocketAddrV4, sync::OnceLock};
 
-use crate::{APP_STATE, SendMode, message::Message, signal_actions::SignalAction};
+use crate::{app_state::APP_STATE, SendMode, message::Message, signal_actions::SignalAction};
 use axum::{Router, http::StatusCode, response::IntoResponse, routing::post};
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use log::info;

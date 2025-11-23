@@ -1,4 +1,4 @@
-import { HorizontalBox, VerticalBox, Button, CheckBox, TextEdit } from "std-widgets.slint";
+import { HorizontalBox, VerticalBox, Button, CheckBox, TextEdit, ScrollView, Palette } from "std-widgets.slint";
 
 export enum LinkState {
     unlinked,
@@ -15,7 +15,7 @@ export struct Group {
 export component MainScreen {
     in-out property <LinkState> link-state: unlinked;
     property <image> qr_code;
-    property <bool> is-syncing: false;
+    in-out property <bool> is-syncing: false;
     in-out property <[Group]> groups;
     in property <bool> autosend;
 
@@ -55,7 +55,7 @@ export component MainScreen {
         spacing: 10px;
 
         VerticalBox {
-            alignment: center;
+            // alignment: start;
             spacing: 20px;
             max-width: 250px;
 
@@ -65,6 +65,7 @@ export component MainScreen {
 
                 Button {
                     icon: @image-url("icons/settings.svg");
+                    colorize-icon: true;
                     clicked => {
                         settings();
                     }
@@ -72,7 +73,8 @@ export component MainScreen {
                 }
 
                 link-lbl := Text {
-                    text: "Message Sender";
+                    text: "Modern Sender";
+                    font-size: 18px;
                 }
                 Rectangle {
                     background: root.link-state == LinkState.linked ? Colors.green : Colors.red;
@@ -82,21 +84,21 @@ export component MainScreen {
                 }
             }
             if link-state == LinkState.unlinked: Button {
-                text: "Start Linking";
+                text: "Приєднати пристрій";
                 clicked => {
                     root.start-link();
                     root.link-state = LinkState.linking;
                 }
             }
             if link-state == LinkState.linking || link-state == LinkState.qr: Button {
-                text: "Link in progress...";
+                text: "Приєднання...";
                 enabled: false;
             }
             if link-state == LinkState.qr: Image {
                 source: qr_code;
             }
             if link-state == LinkState.linked: Button {
-                text: "Sync";
+                text: "Синхронізувати";
                 enabled: !root.is-syncing;
                 clicked => {
                     root.sync();
@@ -105,14 +107,27 @@ export component MainScreen {
             
             }
             if is-syncing: Text {
-                text: "Syncing...";
+                text: "Синхронізація...";
                 horizontal-alignment: center;
             }
-            for group in root.groups: CheckBox {
-                text: group.title;
-                checked: group.state;
-                toggled => {
-                    root.group-edited(group.title, self.checked)
+            
+            ScrollView {
+                viewport-width: self.width;
+                viewport-height: groups.length * (10px + 29px) - 10px;
+                // width: 100%;
+                height: 100%;
+
+                VerticalLayout {
+                    alignment: start;
+                    spacing: 10px;
+
+                    for group in root.groups: CheckBox {
+                        text: group.title;
+                        checked: group.state;
+                        toggled => {
+                            root.group-edited(group.title, self.checked)
+                        }
+                    }
                 }
             }
         }
@@ -120,12 +135,12 @@ export component MainScreen {
         VerticalBox {
             text-edit := TextEdit {
                 enabled: true;
-                placeholder-text: "Message text";
+                placeholder-text: "Текст повідомлення";
                 wrap: word-wrap;
             }
 
             Button {
-                text: "Send";
+                text: "Відправити";
                 clicked => {
                     send-message(text-edit.text)
                 }
@@ -133,7 +148,7 @@ export component MainScreen {
 
             CheckBox {
                 checked: root.autosend;
-                text: "Send automatically";
+                text: "Відправляти автоматично";
                 toggled => {
                     root.autosend-change(self.checked)
                 }
