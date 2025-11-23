@@ -36,6 +36,8 @@ pub struct MessageInner<'a> {
     frequency: &'a str,
     location: &'a str,
     title: &'a str,
+    #[serde(rename = "source")]
+    _source: &'a str,
 }
 
 impl<'a> Message<'a> {
@@ -105,22 +107,26 @@ impl<'a> Deref for IndividualMessage<'a> {
 }
 
 #[derive(Deserialize, Display, Debug)]
+#[serde(from = "Option<&str>")]
 struct Name<'a>(&'a str);
-
-impl<'a> Name<'a> {
-    pub fn new(name: &'a str) -> Self {
-        if name.is_empty() {
-            Self("НВ")
-        } else {
-            Self(name)
-        }
-    }
-}
 
 impl<'a> Deref for Name<'a> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<'a> From<Option<&'a str>> for Name<'a> {
+    fn from(value: Option<&'a str>) -> Self {
+        match value {
+            Some(name) => if name.is_empty() {
+                Self("НВ")
+            } else {
+                Self(name)
+            },
+            None => Self("НВ")
+        }
     }
 }
