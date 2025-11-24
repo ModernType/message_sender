@@ -41,7 +41,7 @@ impl HandleContainer {
                 match serde_json::from_str::<Vec<Message>>(&message) {
                     Ok(messages) => messages.iter().map(Message::to_string).collect(),
                     Err(e) => {
-                        log::error!("Error to parse messages: {}", &e);
+                        log::error!("Error to parse messages: {}\nOriginal body: {}", &e, message);
                         return (StatusCode::BAD_REQUEST, e.to_string())
                     }
                 }
@@ -49,7 +49,10 @@ impl HandleContainer {
             SendMode::Frequency => {
                 match serde_json::from_str::<Vec<Message>>(&message) {
                     Ok(messages) => messages.iter().map(Message::with_frequency).collect(),
-                    Err(e) => return (StatusCode::BAD_REQUEST, e.to_string())
+                    Err(e) => {
+                        log::error!("Error to parse messages: {}\nOriginal body: {}", &e, message);
+                        return (StatusCode::BAD_REQUEST, e.to_string())
+                    }
                 }
             }
             SendMode::Debug => {

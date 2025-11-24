@@ -25,7 +25,7 @@ features = [
     "compat-1-2",
     "accessibility",
     "backend-default",
-    "renderer-femtovg",
+    "renderer-skia",
     "serde"
 ]
 
@@ -45,8 +45,8 @@ slint-build = "1.14.1"
 [dev-dependencies]
 reqwest = {version = "0.12", features = ["blocking"]}
 
-[features]
-skia = ["slint/renderer-skia"]
+# [features]
+# skia = ["slint/renderer-skia"]
 
 [patch.crates-io]
 curve25519-dalek = { git = 'https://github.com/signalapp/curve25519-dalek', tag = 'signal-curve25519-4.1.3' }

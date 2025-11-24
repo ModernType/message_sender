@@ -26,7 +26,7 @@ impl<'a> Deref for Message<'a> {
 
 #[derive(Deserialize, Debug)]
 pub struct MessageInner<'a> {
-    message: MessageGroup<'a>,
+    message: MessageGroup,
     comment: Option<&'a str>,
     #[serde(rename = "rUser")]
     reciever: Name<'a>,
@@ -76,10 +76,10 @@ struct MessageOuter<'a> {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(transparent, bound(deserialize = "'de: 'a"))]
-struct MessageGroup<'a>(Vec<IndividualMessage<'a>>);
+#[serde(transparent)]
+struct MessageGroup(Vec<IndividualMessage>);
 
-impl<'a> Display for MessageGroup<'a> {
+impl Display for MessageGroup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for m in self.0.iter() {
             f.write_str(m)?;
@@ -91,18 +91,28 @@ impl<'a> Display for MessageGroup<'a> {
 
 #[derive(Deserialize, Display, Debug)]
 #[display("{message}")]
-struct IndividualMessage<'a> {
+struct IndividualMessage {
     #[serde(rename = "Key")]
-    datetime: &'a str,
+    datetime: String,
     #[serde(rename = "Value")]
-    message: &'a str,
+    message: CleanedMessage,
 }
 
-impl<'a> Deref for IndividualMessage<'a> {
+impl Deref for IndividualMessage {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        &self.message
+        &self.message.0
+    }
+}
+
+#[derive(Debug, Deserialize, Display)]
+#[serde(from = "String")]
+struct CleanedMessage(String);
+
+impl From<String> for CleanedMessage {
+    fn from(value: String) -> Self {
+        Self(value.trim().to_owned())
     }
 }
 

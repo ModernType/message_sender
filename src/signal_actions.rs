@@ -243,7 +243,7 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
     for key in key_iter {
         let app_handle = app_handle.clone();
         let message = message.clone();
-        async move {
+        tokio::task::spawn_local(async move {
             let message = DataMessage {
                 body: Some(message),
                 timestamp: Some(timestamp),
@@ -271,7 +271,7 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
             
             // We setup this loop to continuosly try to send message with given timeout
             loop {
-                let timeout = tokio::time::sleep(Duration::from_millis(5000));
+                let timeout = tokio::time::sleep(Duration::from_millis(20000));
                 let send = manager.send_message_to_group(
                     key.as_slice(),
                     ContentBody::DataMessage(message.clone()),
@@ -294,7 +294,7 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
                     }
                 }
             }
-        }.await;
+        });
     }
 
     Ok(())
