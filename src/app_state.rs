@@ -22,6 +22,7 @@ pub struct AppState {
     pub autosend: bool,
     pub send_mode: SendMode,
     pub sync_interval: i32,
+    pub send_timeout: i32,
 }
 
 impl Default for AppState {
@@ -35,6 +36,7 @@ impl Default for AppState {
             autosend: false,
             send_mode: SendMode::Standard,
             sync_interval: 60,
+            send_timeout: 30,
         }
     }
 }

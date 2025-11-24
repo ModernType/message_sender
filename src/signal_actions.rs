@@ -261,17 +261,20 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
                 // ],
                 ..Default::default()
             };
-            let mut manager = {
+            let (mut manager, send_timeout) = {
                 let state = APP_STATE.lock().unwrap();
-                match state.manager() {
-                    Some(mng) => mng.clone(),
-                    None => return,
-                }
+                (
+                    match state.manager() {
+                        Some(mng) => mng.clone(),
+                        None => return,
+                    },
+                    state.send_timeout
+                )
             };
             
             // We setup this loop to continuosly try to send message with given timeout
             loop {
-                let timeout = tokio::time::sleep(Duration::from_millis(20000));
+                let timeout = tokio::time::sleep(Duration::from_secs(send_timeout as u64));
                 let send = manager.send_message_to_group(
                     key.as_slice(),
                     ContentBody::DataMessage(message.clone()),

@@ -103,6 +103,10 @@ fn main() {
         let mut state = APP_STATE.lock().unwrap();
         state.sync_interval = interval;
     });
+    app.on_send_timeout_changed(|timeout| {
+        let mut state = APP_STATE.lock().unwrap();
+        state.send_timeout = timeout;
+    });
 
     // Set initial ip address in field from save. Use scope to automatically drop MutexGuard
     {
@@ -112,6 +116,7 @@ fn main() {
         app.set_autosend(state.autosend);
         app.set_send_mode(state.send_mode);
         app.set_sync_interval(state.sync_interval);
+        app.set_send_timeout(state.send_timeout);
     }
 
     _ = app.run();

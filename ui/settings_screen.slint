@@ -22,8 +22,10 @@ export component SettingsScreen {
     callback back();
     callback send-mode-change(SendMode);
     callback sync <=> timer.triggered;
+    callback send-timeout-changed(int);
 
     in-out property <int> sync-interval;
+    in-out property <int> send-timeout;
     in property <string> listener-ip;
     in property <SendMode> send-mode;
 
@@ -90,6 +92,22 @@ export component SettingsScreen {
                 edited(text) => {
                     root.sync-interval = text.to-float();
                     sync-interval-changed(root.sync-interval);
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+
+            Text {
+                text: "Таймаут для повторної відправки повідомлень, с";
+            }
+            LineEdit {
+                text: send-timeout;
+                input-type: number;
+                edited(text) => {
+                    root.send-timeout = text.to-float();
+                    send-timeout-changed(root.send-timeout);
                 }
             }
         }
