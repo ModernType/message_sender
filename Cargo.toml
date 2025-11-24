@@ -1,7 +1,8 @@
 [package]
-name = "message-sender"
+name = "modern-sender"
 version = "0.1.0"
 edition = "2024"
+license = "GPLv3"
 
 [dependencies]
 futures = "0.3.31"

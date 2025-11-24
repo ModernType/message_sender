@@ -3710,28 +3710,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "message-sender"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "derive_more",
- "futures",
- "image",
- "log",
- "presage",
- "presage-store-sqlite",
- "qrcode",
- "reqwest",
- "serde",
- "serde_json",
- "simplelog",
- "slint",
- "slint-build",
- "tokio",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3772,6 +3750,28 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "modern-sender"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "derive_more",
+ "futures",
+ "image",
+ "log",
+ "presage",
+ "presage-store-sqlite",
+ "qrcode",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "slint",
+ "slint-build",
+ "tokio",
 ]
 
 [[package]]
