@@ -1,6 +1,6 @@
 use reqwest::Method;
 
-use crate::message::Message;
+use crate::message::OperatorMessage;
 
 #[test]
 fn send_test_message() {
@@ -20,7 +20,7 @@ fn send_test_message() {
 fn deserialize_messages() {
     const MESSAGES: &str = include_str!("../test.json");
 
-    let messages: Vec<Message> = serde_json::from_str(MESSAGES).unwrap();
+    let messages: Vec<OperatorMessage> = serde_json::from_str(MESSAGES).unwrap();
     for m in messages {
         println!("{m}");
     }

@@ -233,6 +233,7 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
         .flatten()
         .cloned()
         .collect::<Vec<_>>();
+    let markdown = state.markdown;
     // We should drop mutex lock before any await point
     drop(state);
 
@@ -240,27 +241,33 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
+    dbg!(&message);
+    let message = if markdown {
+        let (message, ranges) = crate::message::parse_message_with_format(&message)?;
+        DataMessage {
+            body: Some(message),
+            timestamp: Some(timestamp),
+            body_ranges: ranges,
+            ..Default::default()
+        }
+    }
+    else {
+        DataMessage {
+            body: Some(message),
+            timestamp: Some(timestamp),
+            ..Default::default()
+        }
+    };
+    
     for key in key_iter {
         let app_handle = app_handle.clone();
-        let message = message.clone();
+        let mut message = message.clone();
         tokio::task::spawn_local(async move {
-            let message = DataMessage {
-                body: Some(message),
-                timestamp: Some(timestamp),
-                group_v2: Some(GroupContextV2 {
-                    master_key: Some(key.to_vec()),
-                    revision: Some(0),
-                    ..Default::default()
-                }),
-                // body_ranges: vec![
-                //     BodyRange {
-                //         start: Some(0),
-                //         length: Some(5),
-                //         associated_value: Some(presage::proto::body_range::AssociatedValue::Style(Style::Bold as i32))
-                //     }
-                // ],
+            message.group_v2 = Some(GroupContextV2 {
+                master_key: Some(key.to_vec()),
+                revision: Some(0),
                 ..Default::default()
-            };
+            });
             let (mut manager, send_timeout) = {
                 let state = APP_STATE.lock().unwrap();
                 (

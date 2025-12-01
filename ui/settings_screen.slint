@@ -1,4 +1,4 @@
-import { LineEdit, VerticalBox, HorizontalBox, Button, ComboBox } from "std-widgets.slint";
+import { LineEdit, VerticalBox, HorizontalBox, Button, ComboBox, CheckBox } from "std-widgets.slint";
 
 @rust-attr(derive(serde::Serialize, serde::Deserialize))
 export enum SendMode {
@@ -23,11 +23,13 @@ export component SettingsScreen {
     callback send-mode-change(SendMode);
     callback sync <=> timer.triggered;
     callback send-timeout-changed(int);
+    callback markdown-change(bool);
 
     in-out property <int> sync-interval;
     in-out property <int> send-timeout;
     in property <string> listener-ip;
     in property <SendMode> send-mode;
+    in property <bool> markdown;
 
     function num-send-mode(mode: SendMode) -> int {
         if send-mode == SendMode.standard { return 0; }
@@ -123,7 +125,7 @@ export component SettingsScreen {
                 model: [
                     "Стандартний",
                     "З частотою",
-                    "Debug",
+                    "Як є",
                 ];
                 selected(current-value) => {
                     if self.current-index == 0 {
@@ -136,6 +138,18 @@ export component SettingsScreen {
                         root.send-mode-change(SendMode.debug);
                     }
                 }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+
+            CheckBox {
+                checked: root.markdown;
+                toggled => {
+                    root.markdown-change(self.checked);
+                }
+                text: "Відправляти повідомлення використовуючи форматування Markdown";
             }
         }
     }

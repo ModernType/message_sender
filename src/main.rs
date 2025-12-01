@@ -107,6 +107,10 @@ fn main() {
         let mut state = APP_STATE.lock().unwrap();
         state.send_timeout = timeout;
     });
+    app.on_markdown_change(|markdown| {
+        let mut state = APP_STATE.lock().unwrap();
+        state.markdown = markdown;
+    });
 
     // Set initial ip address in field from save. Use scope to automatically drop MutexGuard
     {
@@ -117,6 +121,7 @@ fn main() {
         app.set_send_mode(state.send_mode);
         app.set_sync_interval(state.sync_interval);
         app.set_send_timeout(state.send_timeout);
+        app.set_markdown(state.markdown);
     }
 
     _ = app.run();

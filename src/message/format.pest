@@ -1,0 +1,7 @@
+bold = {"**"}
+italic = {"*"}
+strikethrough = {"~~"}
+formatting = _{(bold | italic | strikethrough)+}
+text = {(!formatting ~ ANY)*}
+
+formatted_text = {formatting? ~ text ~ (formatting ~ text)* ~ formatting?}
