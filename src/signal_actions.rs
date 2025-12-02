@@ -12,10 +12,7 @@ use futures::{
 use image::Rgb;
 use log::{info, warn};
 use presage::{
-    Manager,
-    libsignal_service::{configuration::SignalServers, content::ContentBody},
-    proto::{DataMessage, GroupContextV2},
-    store::ContentsStore,
+    Manager, libsignal_service::{configuration::SignalServers, content::ContentBody}, manager::Registered, proto::{DataMessage, GroupContextV2}, store::ContentsStore
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use slint::{ModelRc, SharedPixelBuffer, SharedString, ToSharedString, VecModel, Weak};
@@ -42,15 +39,37 @@ pub fn start_signal_thread(
                 .enable_all()
                 .build()
                 .expect("None runtimes shall be constructed before");
+
             let local = LocalSet::new();
+            let mut manager: Option<Manager<SqliteStore, Registered>> = None;
+            
             local.spawn_local(async move {
                 while let Some(action) = rx.next().await {
                     let app_loop = app_handle.clone();
+                    let mng  = manager.clone();
                     _ = match action {
-                        SignalAction::LinkBegin => tokio::task::spawn_local(link(app_loop)),
-                        SignalAction::Sync => tokio::task::spawn_local(sync(app_loop)),
-                        SignalAction::GetGroups => tokio::task::spawn_local(get_groups(app_loop)),
-                        SignalAction::SendMessage(message) => tokio::task::spawn_local(send_message(message, app_loop))
+                        SignalAction::LinkBegin => {
+                            let mng = link(app_loop.clone()).await;
+                            match mng {
+                                Ok(mng) => {
+                                    manager = Some(mng.clone());
+                                    tokio::task::spawn_local(sync(app_loop, mng));
+                                },
+                                Err(e) => {
+                                    log::error!("Linking error: {e}");
+                                    // _ = app_loop.upgrade_in_event_loop(|app| {
+                                    //     app.invoke_cancel_link();
+                                    // });
+                                }
+                            };
+                        },
+                        SignalAction::Sync => {},
+                        SignalAction::GetGroups => { tokio::task::spawn_local(get_groups(app_loop)); },
+                        SignalAction::SendMessage(message) => {
+                            if let Some(manager) = mng {
+                                _ = send_message(message, app_loop, manager).await;
+                            }
+                        },
                     };
                 }
             });
@@ -73,28 +92,27 @@ async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     Ok(store)
 }
 
-async fn update_group_map() {
+async fn update_group_map(manager: &Manager<SqliteStore, Registered>) {
     let mut state = APP_STATE.lock().unwrap();
-    let manager = state.manager().unwrap().clone();
     let group_map = &mut state.cached_groups;
     for (key, group) in manager.store().groups().await.unwrap().flatten() {
         group_map.insert(group.title, key);
     }
 }
 
-async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
+async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Registered>> {
     let store = get_store().await?;
     info!("Registering from store");
     match Manager::load_registered(store).await {
         Ok(mng) => {
-            APP_STATE.lock().unwrap().set_manager(mng);
-            update_group_map().await;
             app_handle
                 .clone()
                 .upgrade_in_event_loop(move |app| {
                     app.invoke_linked();
                 })
-                .unwrap()
+                .unwrap();
+            update_group_map(&mng).await;
+            Ok(mng)
         }
         Err(e) => {
             warn!("{e}");
@@ -102,7 +120,7 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
             let store = get_store().await?;
             info!("Starting linking with device");
             let app_handle2 = app_handle.clone();
-            let _res = futures::future::join(
+            let (mng_res, _) = futures::future::join(
                 async move {
                     match Manager::link_secondary_device(
                         store,
@@ -114,16 +132,19 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
                     {
                         Ok(mng) => {
                             info!("Has manager");
-                            APP_STATE.lock().unwrap().set_manager(mng);
-                            update_group_map().await;
+                            update_group_map(&mng).await;
                             app_handle
                                 .clone()
                                 .upgrade_in_event_loop(|app| {
                                     app.invoke_linked();
                                 })
-                                .unwrap()
+                                .unwrap();
+                            Ok(mng)
                         }
-                        Err(e) => warn!("Link failure: {e}"),
+                        Err(e) => {
+                            warn!("Link failure: {e}");
+                            return Err(e)
+                        },
                     }
                 },
                 async move {
@@ -154,45 +175,32 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<()> {
                 },
             )
             .await;
+            Ok(mng_res?)
         }
-    };
-    info!("Linking finished");
-    Ok(())
+    }
 }
 
-async fn sync(app_handle: Weak<App>) -> anyhow::Result<()> {
-    let state = APP_STATE.lock().unwrap();
-    let mut manager = state.manager().unwrap().clone();
-    drop(state);
+async fn sync(_app_handle: Weak<App>, mut manager: Manager<SqliteStore, Registered>) -> anyhow::Result<()> {
     let reciever = manager.receive_messages().await?;
     pin_mut!(reciever);
-    let mut msg_count = 0;
     while let Some(msg) = reciever.next().await {
         match msg {
             presage::model::messages::Received::Contacts => {
                 info!("Got contacts");
             }
             presage::model::messages::Received::Content(_) => {
-                msg_count += 1;
-                info!("Got message {msg_count}");
+                info!("Got message");
             }
             presage::model::messages::Received::QueueEmpty => {
-                info!("New messages ended");
-                break;
+                update_group_map(&manager).await;
+                // _ = app_handle.upgrade_in_event_loop(|app| {
+                //     app.invoke_synced();
+                // })
+                // tokio::time::sleep(Duration::from_millis(5000)).await;
             }
         }
     }
-    let mut state = APP_STATE.lock().unwrap();
-    let group_map = &mut state.cached_groups;
-    for (key, group) in manager.store().groups().await?.flatten() {
-        group_map.insert(group.title, key);
-    }
-    app_handle
-        .clone()
-        .upgrade_in_event_loop(|app| {
-            app.invoke_synced();
-        })
-        .unwrap();
+    log::error!("Sync suspended");
     Ok(())
 }
 
@@ -224,7 +232,7 @@ async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<()> {
+async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<SqliteStore, Registered>) -> anyhow::Result<()> {
     let state = APP_STATE.lock().unwrap();
     let key_iter = state
         .group_active
@@ -262,21 +270,16 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
     for key in key_iter {
         let app_handle = app_handle.clone();
         let mut message = message.clone();
-        tokio::task::spawn_local(async move {
+        let mut manager =  manager.clone();
+        async move {
             message.group_v2 = Some(GroupContextV2 {
                 master_key: Some(key.to_vec()),
                 revision: Some(0),
                 ..Default::default()
             });
-            let (mut manager, send_timeout) = {
+            let send_timeout = {
                 let state = APP_STATE.lock().unwrap();
-                (
-                    match state.manager() {
-                        Some(mng) => mng.clone(),
-                        None => return,
-                    },
-                    state.send_timeout
-                )
+                state.send_timeout
             };
             
             // We setup this loop to continuosly try to send message with given timeout
@@ -304,8 +307,10 @@ async fn send_message(message: String, app_handle: Weak<App>) -> anyhow::Result<
                     }
                 }
             }
-        });
+        }.await;
     }
+
+    info!("{:?}", APP_STATE.lock().unwrap());
 
     Ok(())
 }

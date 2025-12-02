@@ -2,8 +2,6 @@ use std::{
     collections::{HashMap, VecDeque}, fmt::Debug, fs::{File, OpenOptions}, net::SocketAddrV4, sync::{LazyLock, Mutex,}
 };
 use serde::{Serialize, Deserialize};
-use presage::{Manager, manager::Registered};
-use presage_store_sqlite::SqliteStore;
 use slint::SharedString;
 
 use crate::SendMode;
@@ -11,8 +9,6 @@ use crate::SendMode;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppState {
-    #[serde(skip)]
-    manager: Option<Manager<SqliteStore, Registered>>,
     #[serde(skip)]
     pub cached_groups: HashMap<String, [u8; 32]>,
     #[serde(skip)]
@@ -29,7 +25,6 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            manager: None,
             user_notification_queue: VecDeque::new(),
             cached_groups: HashMap::new(),
             group_active: HashMap::new(),
@@ -44,14 +39,6 @@ impl Default for AppState {
 }
 
 impl AppState {
-    pub fn set_manager(&mut self, manager: Manager<SqliteStore, Registered>) {
-        self.manager = Some(manager);
-    }
-
-    pub fn manager(&self) -> Option<&Manager<SqliteStore, Registered>> {
-        self.manager.as_ref()
-    }
-
     pub fn load() -> anyhow::Result<Self> {
         let data = File::open("data.json")?;
         let state = serde_json::from_reader(data)?;
