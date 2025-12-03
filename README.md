@@ -6,8 +6,11 @@
 - [x] Edit and send messages to selected groups
 - [x] Accept messages sent to the app
 - [x] Full Op support
-- [ ] Rich text support (Half baked)
-- [ ] WhatsApp?
+- [x] Rich text support (Markdown)
+- [ ] Send to contacts
+- [ ] Send categories
+- [ ] File sending
+- [ ] WhatsApp
 
 ## Installing
 Run the executable and you are good to go 👍
