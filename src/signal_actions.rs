@@ -243,15 +243,10 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
     // We should drop mutex lock before any await point
     drop(state);
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
     let message = if markdown {
         let (message, ranges) = crate::message::parse_message_with_format(&message)?;
         DataMessage {
             body: Some(message),
-            timestamp: Some(timestamp),
             body_ranges: ranges,
             ..Default::default()
         }
@@ -259,7 +254,6 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
     else {
         DataMessage {
             body: Some(message),
-            timestamp: Some(timestamp),
             ..Default::default()
         }
     };
@@ -269,11 +263,16 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
         let mut message = message.clone();
         let mut manager =  manager.clone();
         async move {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
             message.group_v2 = Some(GroupContextV2 {
                 master_key: Some(key.to_vec()),
                 revision: Some(0),
                 ..Default::default()
             });
+            message.timestamp = Some(timestamp);
             let send_timeout = {
                 let state = APP_STATE.lock().unwrap();
                 state.send_timeout
@@ -306,8 +305,6 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
             }
         }.await;
     }
-
-    info!("{:?}", APP_STATE.lock().unwrap());
 
     Ok(())
 }
