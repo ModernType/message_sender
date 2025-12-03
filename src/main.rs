@@ -75,7 +75,7 @@ fn main() {
     });
     app.on_group_edited(|group, state| {
         let mut app_state = APP_STATE.lock().unwrap();
-        app_state.group_active.insert(group, state);
+        app_state.cached_groups.get_mut(&group.to_string()).unwrap().active = state;
     });
     let mut tx_clone = tx.clone();
     app.on_send_message(move |message| {

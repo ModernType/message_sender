@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque}, fmt::Debug, fs::{File, OpenOptions}, net::SocketAddrV4, sync::{LazyLock, Mutex,}
+    collections::{HashMap, VecDeque}, fmt::Debug, fs::{File, OpenOptions}, net::SocketAddrV4, sync::{LazyLock, Mutex}
 };
 use serde::{Serialize, Deserialize};
 use slint::SharedString;
@@ -9,11 +9,9 @@ use crate::SendMode;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppState {
-    #[serde(skip)]
-    pub cached_groups: HashMap<String, [u8; 32]>,
+    pub cached_groups: HashMap<String, GroupData>,
     #[serde(skip)]
     user_notification_queue: VecDeque<SharedString>,
-    pub group_active: HashMap<SharedString, bool>,
     pub recieve_address: SocketAddrV4,
     pub autosend: bool,
     pub send_mode: SendMode,
@@ -22,12 +20,19 @@ pub struct AppState {
     pub markdown: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(transparent)]
+pub struct GroupData {
+    #[serde(skip)]
+    pub key: Option<[u8; 32]>,
+    pub active: bool,
+}
+
 impl Default for AppState {
     fn default() -> Self {
         Self {
             user_notification_queue: VecDeque::new(),
             cached_groups: HashMap::new(),
-            group_active: HashMap::new(),
             recieve_address: "127.0.0.1:8000".parse().unwrap(),
             autosend: false,
             send_mode: SendMode::Standard,

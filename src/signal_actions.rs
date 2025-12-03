@@ -15,10 +15,10 @@ use presage::{
     Manager, libsignal_service::{configuration::SignalServers, content::ContentBody}, manager::Registered, proto::{DataMessage, GroupContextV2}, store::ContentsStore
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
-use slint::{ModelRc, SharedPixelBuffer, SharedString, ToSharedString, VecModel, Weak};
+use slint::{ModelRc, SharedPixelBuffer, ToSharedString, VecModel, Weak};
 use tokio::task::LocalSet;
 
-use crate::{app_state::APP_STATE, App, Group};
+use crate::{App, Group, app_state::{APP_STATE, GroupData}};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum SignalAction {
@@ -94,9 +94,13 @@ async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
 
 async fn update_group_map(manager: &Manager<SqliteStore, Registered>) {
     let mut state = APP_STATE.lock().unwrap();
-    let group_map = &mut state.cached_groups;
     for (key, group) in manager.store().groups().await.unwrap().flatten() {
-        group_map.insert(group.title, key);
+        state.cached_groups.entry(group.title)
+        .and_modify(|data| data.key = Some(key))
+        .or_insert(GroupData {
+            key: Some(key),
+            active: false,
+        });
     }
 }
 
@@ -205,21 +209,17 @@ async fn sync(_app_handle: Weak<App>, mut manager: Manager<SqliteStore, Register
 }
 
 async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
-    let state = APP_STATE.lock().unwrap();
-    let mut groups = state
-        .cached_groups
-        .keys()
-        .map(SharedString::from)
-        .collect::<Vec<_>>();
-    groups.sort();
-    let groups = groups
-        .into_iter()
-        .map(|title| {
-            let state = state.group_active.get(&title).cloned().unwrap_or(false);
-            Group { title, state }
+    let mut groups = {
+        let state =  APP_STATE.lock().unwrap();
+        state.cached_groups
+        .iter()
+        .map(|(title, GroupData { active,   .. })| Group {
+            title: title.to_shared_string(),
+            state: *active,
         })
-        .collect::<Vec<_>>();
-    drop(state);
+        .collect::<Vec<_>>()
+    };
+    groups.sort_by(|g1, g2| g1.title.cmp(&g2.title));
     app_handle
         .clone()
         .upgrade_in_event_loop(move |app| {
@@ -233,13 +233,11 @@ async fn get_groups(app_handle: Weak<App>) -> anyhow::Result<()> {
 }
 
 async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<SqliteStore, Registered>) -> anyhow::Result<()> {
+    update_group_map(&manager).await;
     let state = APP_STATE.lock().unwrap();
-    let key_iter = state
-        .group_active
-        .iter()
-        .filter_map(|(title, send)| send.then(|| state.cached_groups.get(&title.to_string())))
-        .flatten()
-        .cloned()
+    let key_iter = state.cached_groups
+        .values()
+        .filter_map(|data| data.active.then_some(data.key.expect("Key must be already in the cache").clone()))
         .collect::<Vec<_>>();
     let markdown = state.markdown;
     // We should drop mutex lock before any await point
@@ -249,7 +247,6 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    dbg!(&message);
     let message = if markdown {
         let (message, ranges) = crate::message::parse_message_with_format(&message)?;
         DataMessage {
