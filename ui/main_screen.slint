@@ -28,7 +28,15 @@ export component MainScreen {
     callback send-message(string);
     callback autosend-change(bool);
     callback get-groups();
-    
+
+    callback init-sync-state-change(bool);
+    init-sync-state-change(state) => {
+        is-syncing = state
+    }
+    callback unlink();
+    unlink => {
+        root.link-state = LinkState.unlinked;
+    }
     callback set-qr(image);
     set-qr(qr) => {
         debug("Called `set-qr`");
@@ -99,11 +107,10 @@ export component MainScreen {
                 source: qr_code;
             }
             if link-state == LinkState.linked: Button {
-                text: "Синхронізувати";
+                text: "Оновити список груп";
                 enabled: !root.is-syncing;
                 clicked => {
                     root.sync();
-                    root.is-syncing = true;
                 }
             
             }
@@ -142,6 +149,7 @@ export component MainScreen {
 
             Button {
                 text: "Відправити";
+                enabled: !is-syncing;
                 clicked => {
                     send-message(text-edit.text)
                 }

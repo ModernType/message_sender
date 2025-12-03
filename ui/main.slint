@@ -54,7 +54,6 @@ export component App inherits Window {
     callback autosync();
     autosync => {
         sync();
-        main-scr.is-syncing = true;
     }
 
     // To native code
@@ -75,6 +74,8 @@ export component App inherits Window {
     callback linked <=> main-scr.linked;
     callback synced <=> main-scr.synced;
     callback set-message-text <=> main-scr.set-message-text;
+    callback unlink <=> main-scr.unlink;
+    callback init-sync-state-change <=> main-scr.init-sync-state-change;
 
     // Callbacks for snackbar
     in-out property <bool> notif-open: snackbar.opened;

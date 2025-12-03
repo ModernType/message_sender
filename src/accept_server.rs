@@ -5,7 +5,7 @@ use std::{net::SocketAddrV4, sync::OnceLock};
 use crate::{app_state::APP_STATE, SendMode, message::OperatorMessage as Message, signal_actions::SignalAction};
 use axum::{Router, http::StatusCode, response::IntoResponse, routing::post};
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use log::{info, warn};
+use log::info;
 use slint::Weak;
 use tokio::net::TcpListener;
 
@@ -60,6 +60,9 @@ impl HandleContainer {
             }
         };
         if autosend {
+            _ = self.app_handle.clone().upgrade_in_event_loop(|app| {
+                app.invoke_report("Отримано повідомлення. Відправка...".into());
+            });
             for message in messages {
                 _ = self
                     .action_send

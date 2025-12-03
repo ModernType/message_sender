@@ -36,8 +36,8 @@ impl Default for AppState {
             recieve_address: "127.0.0.1:8000".parse().unwrap(),
             autosend: false,
             send_mode: SendMode::Standard,
-            sync_interval: 60,
-            send_timeout: 30,
+            sync_interval: 10,
+            send_timeout: 90,
             markdown: true,
         }
     }

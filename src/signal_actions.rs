@@ -63,7 +63,12 @@ pub fn start_signal_thread(
                                 }
                             };
                         },
-                        SignalAction::Sync => {},
+                        SignalAction::Sync => {
+                            if let Some(manager) = mng {
+                                update_group_map(&manager).await;
+                                _ = get_groups(app_loop).await;
+                            }
+                        },
                         SignalAction::GetGroups => { tokio::task::spawn_local(get_groups(app_loop)); },
                         SignalAction::SendMessage(message) => {
                             if let Some(manager) = mng {
@@ -136,7 +141,10 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Regi
                     {
                         Ok(mng) => {
                             info!("Has manager");
-                            update_group_map(&mng).await;
+                            {
+                                let mut state = APP_STATE.lock().unwrap();
+                                state.cached_groups.clear();
+                            }
                             app_handle
                                 .clone()
                                 .upgrade_in_event_loop(|app| {
@@ -147,6 +155,8 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Regi
                         }
                         Err(e) => {
                             warn!("Link failure: {e}");
+                            _ = app_handle
+                                .upgrade_in_event_loop(|app| app.invoke_unlink());
                             return Err(e)
                         },
                     }
@@ -171,9 +181,11 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Regi
                                     app.invoke_set_qr(s_image);
                                 })
                                 .unwrap();
-                        }
+                        },
                         Err(e) => {
-                            warn!("QR code future error: {e}")
+                            warn!("QR code future error: {e}");
+                            _ = app_handle2
+                                .upgrade_in_event_loop(|app| app.invoke_unlink());
                         }
                     }
                 },
@@ -184,9 +196,12 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Regi
     }
 }
 
-async fn sync(_app_handle: Weak<App>, mut manager: Manager<SqliteStore, Registered>) -> anyhow::Result<()> {
+async fn sync(app_handle: Weak<App>, mut manager: Manager<SqliteStore, Registered>) -> anyhow::Result<()> {
     let reciever = manager.receive_messages().await?;
     pin_mut!(reciever);
+    _ = app_handle.upgrade_in_event_loop(|app| {
+        app.invoke_init_sync_state_change(true);
+    });
     while let Some(msg) = reciever.next().await {
         match msg {
             presage::model::messages::Received::Contacts => {
@@ -197,10 +212,10 @@ async fn sync(_app_handle: Weak<App>, mut manager: Manager<SqliteStore, Register
             }
             presage::model::messages::Received::QueueEmpty => {
                 update_group_map(&manager).await;
-                // _ = app_handle.upgrade_in_event_loop(|app| {
-                //     app.invoke_synced();
-                // })
-                // tokio::time::sleep(Duration::from_millis(5000)).await;
+                _ = get_groups(app_handle.clone()).await;
+                _ = app_handle.upgrade_in_event_loop(|app| {
+                    app.invoke_init_sync_state_change(false);
+                })
             }
         }
     }
