@@ -47,110 +47,120 @@ export component SettingsScreen {
 
     VerticalBox {
         padding: 10px;
-        spacing: 10px;
-        alignment: start;
-
-        HorizontalBox {
-            Button {
-                icon: @image-url("icons/back.svg");
-                colorize-icon: true;
-                clicked => {
-                    back()
-                }
-                width: self.preferred-width;
-            }
-            Text {
-                text: "Налаштування";
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                font-size: 18px;
-            }
-        }
 
         VerticalLayout {
-            spacing: 2px;
+            spacing: 10px;
+            alignment: start;
 
-            Text {
-                text: "IP-адреса прийому повідомлень";
-            }
-            listener-ip := IpEdit {
-                text: root.listener-ip;
-            }
-            Text {
-                text: "Щоб зміни цього параметру вступили у силу потрібно перезавантажити програму";
-                font-italic: true;
-            }
-        }
-
-        VerticalLayout {
-            spacing: 2px;
-
-            Text {
-                text: "Інтервал автоматичного оновлення списку груп, с";
-            }
-            LineEdit {
-                text: sync-interval;
-                input-type: number;
-                edited(text) => {
-                    root.sync-interval = text.to-float();
-                    sync-interval-changed(root.sync-interval);
-                }
-            }
-        }
-
-        VerticalLayout {
-            spacing: 2px;
-
-            Text {
-                text: "Таймаут для повторної відправки повідомлень, с";
-            }
-            LineEdit {
-                text: send-timeout;
-                input-type: number;
-                edited(text) => {
-                    root.send-timeout = text.to-float();
-                    send-timeout-changed(root.send-timeout);
-                }
-            }
-        }
-
-        VerticalLayout {
-            spacing: 2px;
-
-            Text {
-                text: "Режим відправки повідомлень";
-            }
-            ComboBox {
-                current-index: num-send-mode(root.send-mode);
-                model: [
-                    "Стандартний",
-                    "З частотою",
-                    "Як є",
-                ];
-                selected(current-value) => {
-                    if self.current-index == 0 {
-                        root.send-mode-change(SendMode.standard);
+            HorizontalBox {
+                Button {
+                    icon: @image-url("icons/back.svg");
+                    colorize-icon: true;
+                    clicked => {
+                        back()
                     }
-                    else if self.current-index == 1 {
-                        root.send-mode-change(SendMode.frequency);
-                    }
-                    else if self.current-index == 2 {
-                        root.send-mode-change(SendMode.debug);
+                    width: self.preferred-width;
+                }
+                Text {
+                    text: "Налаштування";
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    font-size: 18px;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                Text {
+                    text: "IP-адреса прийому повідомлень";
+                }
+                listener-ip := IpEdit {
+                    text: root.listener-ip;
+                }
+                Text {
+                    text: "Щоб зміни цього параметру вступили у силу потрібно перезавантажити програму";
+                    font-italic: true;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                Text {
+                    text: "Інтервал автоматичного оновлення списку груп, с";
+                }
+                LineEdit {
+                    text: sync-interval;
+                    input-type: number;
+                    edited(text) => {
+                        root.sync-interval = text.to-float();
+                        sync-interval-changed(root.sync-interval);
                     }
                 }
             }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                Text {
+                    text: "Таймаут для повторної відправки повідомлень, с";
+                }
+                LineEdit {
+                    text: send-timeout;
+                    input-type: number;
+                    edited(text) => {
+                        root.send-timeout = text.to-float();
+                        send-timeout-changed(root.send-timeout);
+                    }
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                Text {
+                    text: "Режим відправки повідомлень";
+                }
+                ComboBox {
+                    current-index: num-send-mode(root.send-mode);
+                    model: [
+                        "Стандартний",
+                        "З частотою",
+                        "Як є",
+                    ];
+                    selected(current-value) => {
+                        if self.current-index == 0 {
+                            root.send-mode-change(SendMode.standard);
+                        }
+                        else if self.current-index == 1 {
+                            root.send-mode-change(SendMode.frequency);
+                        }
+                        else if self.current-index == 2 {
+                            root.send-mode-change(SendMode.debug);
+                        }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                CheckBox {
+                    checked: root.markdown;
+                    toggled => {
+                        root.markdown-change(self.checked);
+                    }
+                    text: "Відправляти повідомлення використовуючи форматування Markdown";
+                }
+            }
         }
 
-        VerticalLayout {
-            spacing: 2px;
-
-            CheckBox {
-                checked: root.markdown;
-                toggled => {
-                    root.markdown-change(self.checked);
-                }
-                text: "Відправляти повідомлення використовуючи форматування Markdown";
-            }
+        Text {
+            text: "Version 0.1.0. Developed by ModernTy";
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-italic: true;
         }
     }
 }
