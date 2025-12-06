@@ -14,6 +14,8 @@ use crate::{accept_server::start_server_thread, signal_actions::start_signal_thr
 use signal_actions::SignalAction;
 use app_state::APP_STATE;
 
+#[macro_use]
+mod helpers;
 mod accept_server;
 mod message;
 mod observable;

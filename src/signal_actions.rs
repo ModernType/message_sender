@@ -18,7 +18,7 @@ use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, Sql
 use slint::{ModelRc, SharedPixelBuffer, ToSharedString, VecModel, Weak};
 use tokio::task::LocalSet;
 
-use crate::{App, Group, app_state::{APP_STATE, GroupData}};
+use crate::{App, Group, app_state::{APP_STATE, GroupData}, report};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum SignalAction {
@@ -308,7 +308,8 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
                     Either::Left((send_res, _)) => {
                         match send_res {
                             Ok(_) => {
-                                _ = app_handle.upgrade_in_event_loop(|app| app.invoke_report("Повідомлення надіслано".to_shared_string()));
+                                // _ = app_handle.upgrade_in_event_loop(|app| app.invoke_report("Повідомлення надіслано".to_shared_string()));
+                                report!(app_handle, "Повідомлення надіслано");
                                 break;
                             },
                             Err(e) => { _ = app_handle.upgrade_in_event_loop(move |app| app.invoke_report(slint::format!("Помилка відправки, повтор: {e}"))); },

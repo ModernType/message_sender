@@ -119,9 +119,10 @@ async fn start_server(addr: SocketAddrV4, app_handle: Weak<crate::App>) -> anyho
                 break listener
             },
             Err(_e) => {
-                _ = app_handle.upgrade_in_event_loop(move |app| {
-                    app.invoke_report(slint::format!("Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її у налаштуваннях", &addr));
-                });
+                // _ = app_handle.upgrade_in_event_loop(move |app| {
+                //     app.invoke_report(slint::format!("Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її у налаштуваннях", &addr));
+                // });
+                report_log!(warn, app_handle, "Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її у налаштуваннях", &addr);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
