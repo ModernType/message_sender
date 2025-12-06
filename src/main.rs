@@ -111,6 +111,10 @@ fn main() {
         let mut state = APP_STATE.lock().unwrap();
         state.markdown = markdown;
     });
+    app.on_parallel_send_changed(|par_send| {
+        let mut state = APP_STATE.lock().unwrap();
+        state.parallel_send = par_send;
+    });
 
     // Set initial ip address in field from save. Use scope to automatically drop MutexGuard
     {
@@ -122,6 +126,7 @@ fn main() {
         app.set_sync_interval(state.sync_interval);
         app.set_send_timeout(state.send_timeout);
         app.set_markdown(state.markdown);
+        app.set_parallel_send(state.parallel_send);
     }
 
     _ = app.run();

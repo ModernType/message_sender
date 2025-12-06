@@ -255,6 +255,7 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
         .filter_map(|data| data.active.then_some(data.key.expect("Key must be already in the cache").clone()))
         .collect::<Vec<_>>();
     let markdown = state.markdown;
+    let parallel_send = state.parallel_send;
     // We should drop mutex lock before any await point
     drop(state);
 
@@ -277,7 +278,7 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
         let app_handle = app_handle.clone();
         let mut message = message.clone();
         let mut manager =  manager.clone();
-        async move {
+        let send_fut =  async move {
             let timestamp = std::time::SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
@@ -318,7 +319,14 @@ async fn send_message(message: String, app_handle: Weak<App>, manager: Manager<S
                     }
                 }
             }
-        }.await;
+        };
+
+        if parallel_send {
+            tokio::task::spawn_local(send_fut);
+        }
+        else {
+            send_fut.await
+        }
     }
 
     Ok(())

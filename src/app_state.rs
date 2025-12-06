@@ -18,6 +18,7 @@ pub struct AppState {
     pub sync_interval: i32,
     pub send_timeout: i32,
     pub markdown: bool,
+    pub parallel_send: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -39,6 +40,7 @@ impl Default for AppState {
             sync_interval: 10,
             send_timeout: 90,
             markdown: true,
+            parallel_send: false,
         }
     }
 }

@@ -24,12 +24,14 @@ export component SettingsScreen {
     callback sync <=> timer.triggered;
     callback send-timeout-changed(int);
     callback markdown-change(bool);
+    callback parallel-send-changed(bool);
 
     in-out property <int> sync-interval;
     in-out property <int> send-timeout;
     in property <string> listener-ip;
     in property <SendMode> send-mode;
     in property <bool> markdown;
+    in property <bool> parallel-send;
 
     function num-send-mode(mode: SendMode) -> int {
         if send-mode == SendMode.standard { return 0; }
@@ -152,6 +154,18 @@ export component SettingsScreen {
                         root.markdown-change(self.checked);
                     }
                     text: "Відправляти повідомлення використовуючи форматування Markdown";
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                CheckBox {
+                    checked: root.parallel-send;
+                    toggled => {
+                        root.parallel-send-changed(self.checked);
+                    }
+                    text: "Відправляти повідомлення паралельно (НЕСТАБІЛЬНО!";
                 }
             }
         }
