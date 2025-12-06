@@ -61,7 +61,8 @@ impl<'a> Display for MessageInner<'a> {
         f.write_char('\n')?;
         write!(f, "{}", self.message)?;
         if let Some(comment) = self.comment {
-            f.write_str(comment)?;
+            f.write_char('\n')?;
+            write!(f, "Коментар: {}", comment)?;
         }
         Ok(())
     }
