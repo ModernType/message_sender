@@ -151,7 +151,8 @@ export component MainScreen {
                 text: "Відправити";
                 enabled: !is-syncing;
                 clicked => {
-                    send-message(text-edit.text)
+                    send-message(text-edit.text);
+                    root.set-message-text("");
                 }
             }
 
