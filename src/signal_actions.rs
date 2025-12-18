@@ -15,10 +15,8 @@ use presage::{
     Manager, libsignal_service::{configuration::SignalServers, content::ContentBody}, manager::Registered, proto::{DataMessage, GroupContextV2}, store::ContentsStore
 };
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
-use slint::{ModelRc, SharedPixelBuffer, ToSharedString, VecModel, Weak};
 use tokio::task::LocalSet;
 
-use crate::{App, Group, app_state::{APP_STATE, GroupData}, report};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum SignalAction {
@@ -98,28 +96,22 @@ async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
 }
 
 async fn update_group_map(manager: &Manager<SqliteStore, Registered>) {
-    let mut state = APP_STATE.lock().unwrap();
-    for (key, group) in manager.store().groups().await.unwrap().flatten() {
-        state.cached_groups.entry(group.title)
-        .and_modify(|data| data.key = Some(key))
-        .or_insert(GroupData {
-            key: Some(key),
-            active: false,
-        });
-    }
+    // let mut state = APP_STATE.lock().unwrap();
+    // for (key, group) in manager.store().groups().await.unwrap().flatten() {
+    //     state.cached_groups.entry(group.title)
+    //     .and_modify(|data| data.key = Some(key))
+    //     .or_insert(GroupData {
+    //         key: Some(key),
+    //         active: false,
+    //     });
+    // }
 }
 
-async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Registered>> {
+async fn link() -> anyhow::Result<Manager<SqliteStore, Registered>> {
     let store = get_store().await?;
     info!("Registering from store");
     match Manager::load_registered(store).await {
         Ok(mng) => {
-            app_handle
-                .clone()
-                .upgrade_in_event_loop(move |app| {
-                    app.invoke_linked();
-                })
-                .unwrap();
             update_group_map(&mng).await;
             Ok(mng)
         }
@@ -128,7 +120,6 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Regi
             let (tx, rx) = futures::channel::oneshot::channel();
             let store = get_store().await?;
             info!("Starting linking with device");
-            let app_handle2 = app_handle.clone();
             let (mng_res, _) = futures::future::join(
                 async move {
                     match Manager::link_secondary_device(
@@ -141,22 +132,10 @@ async fn link(app_handle: Weak<App>) -> anyhow::Result<Manager<SqliteStore, Regi
                     {
                         Ok(mng) => {
                             info!("Has manager");
-                            {
-                                let mut state = APP_STATE.lock().unwrap();
-                                state.cached_groups.clear();
-                            }
-                            app_handle
-                                .clone()
-                                .upgrade_in_event_loop(|app| {
-                                    app.invoke_linked();
-                                })
-                                .unwrap();
                             Ok(mng)
                         }
                         Err(e) => {
                             warn!("Link failure: {e}");
-                            _ = app_handle
-                                .upgrade_in_event_loop(|app| app.invoke_unlink());
                             return Err(e)
                         },
                     }

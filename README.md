@@ -26,5 +26,5 @@ Then in the project folder build it with `cargo`:
 
 ```cargo build --release```
 
-Executable will be located in: `{project_folder}/target/release/message-sender`
+Executable will be located in: `{project_folder}/target/release/modern-sender`
 

@@ -1,0 +1,273 @@
+use std::{sync::Arc, time::{Duration, SystemTime}};
+
+use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
+use log::{info, warn};
+use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, GroupContextV2}, store::ContentsStore};
+use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
+use tokio::task::LocalSet;
+
+use crate::ui::{self, message_history::{GroupInfo, SendMessageInfo, SendStatus}};
+
+type Manager = presage::Manager<SqliteStore, Registered>;
+
+#[derive(Debug, Clone)]
+pub enum SignalMessage {
+    LinkBegin,
+    Sync(Manager),
+    // GetGroups,
+    SendMessage(Manager, Arc<SendMessageInfo>, bool, bool),
+}
+
+pub struct SignalWorker {
+    signal_reciever: UnboundedReceiver<SignalMessage>,
+    ui_message_sender: UnboundedSender<crate::ui::Message>,
+
+}
+
+impl SignalWorker {
+    pub fn new(
+        signal_reciever: UnboundedReceiver<SignalMessage>,
+        ui_message_sender: UnboundedSender<crate::ui::Message>
+    ) -> Self {
+        Self { signal_reciever, ui_message_sender }
+    }
+
+    pub fn spawn_new(
+        signal_reciever: UnboundedReceiver<SignalMessage>,
+        ui_message_sender: UnboundedSender<crate::ui::Message>
+    ) {
+        std::thread::Builder::new().stack_size(8 * 1024 * 1024).spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("No runtime must be built");
+            let worker = Self::new(signal_reciever, ui_message_sender);
+            let local = LocalSet::new();
+            local.spawn_local(worker.future());
+            rt.block_on(local)
+        }).unwrap();
+    }
+
+    async fn future(mut self) {
+        while let Some(m) = self.signal_reciever.next().await {
+            let mut ui_message_sender = self.ui_message_sender.clone();
+            match m {
+                SignalMessage::LinkBegin => {
+                    let result = link(ui_message_sender.clone()).await.map(ui::Message::SetManager);
+                    tokio::spawn(async move { ui_message_sender.send(result.into()).await });
+                },
+                SignalMessage::Sync(mng) => {
+                    _ = tokio::task::spawn_local(sync(ui_message_sender.clone(), mng));
+                },
+                SignalMessage::SendMessage(manager, message, markdown, parallel) => {
+                    send_message(ui_message_sender.clone(), manager, message, markdown, parallel).await;
+                }
+            };
+        }
+    }
+}
+
+async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
+    let store = SqliteStore::open_with_options(
+        SqliteConnectOptions::default()
+            .filename("signal_data.db")
+            .create_if_missing(true),
+        OnNewIdentity::Trust,
+    )
+    .await?;
+    // Clearing all messages to free space
+    // _ = store.clear_messages().await;
+    Ok(store)
+}
+
+pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<([u8;32], String)>> {
+    Ok(
+        manager.store().groups().await?.into_iter()
+        .flatten()
+        .map(|(key, group)| {
+            (key, group.title)
+        })
+        .collect()
+    )
+}
+
+async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
+    let mut ch = msg_send_channel.clone();
+    tokio::spawn(async move { ch.send(ui::main_screen::Message::SetLinkState(ui::main_screen::LinkState::Linking).into()).await });
+    let store = get_store().await?;
+    info!("Registering from store");
+    match Manager::load_registered(store).await {
+        Ok(mng) => {
+            // update_group_map(&mng).await;
+            Ok(mng)
+        }
+        Err(e) => {
+            warn!("{e}");
+            let (tx, rx) = futures::channel::oneshot::channel();
+            let store = get_store().await?;
+            info!("Starting linking with device");
+            let (mng_res, _) = futures::future::join(
+                async move {
+                    match presage::Manager::link_secondary_device(
+                        store,
+                        SignalServers::Production,
+                        "message-sender".to_owned(),
+                        tx,
+                    )
+                    .await
+                    {
+                        Ok(mng) => {
+                            info!("Has manager");
+                            Ok(mng)
+                        }
+                        Err(e) => {
+                            warn!("Link failure: {e}");
+                            return Err(e)
+                        },
+                    }
+                },
+                async move {
+                    match rx.await {
+                        Ok(url) => {
+                           msg_send_channel.send(crate::ui::main_screen::Message::SetRegisterUrl(url).into()).await.unwrap()
+                        },
+                        Err(_e) => {
+                            
+                        }
+                    }
+                },
+            )
+            .await;
+            Ok(mng_res?)
+        }
+    }
+}
+
+async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut manager: Manager) -> anyhow::Result<()> {
+    let reciever = manager.receive_messages().await?;
+    let mut reciever = Box::pin(reciever);
+    while let Some(msg) = reciever.next().await {
+        match msg {
+            presage::model::messages::Received::Contacts => {
+                info!("Got contacts");
+            }
+            presage::model::messages::Received::Content(_) => {
+                info!("Got message");
+            }
+            presage::model::messages::Received::QueueEmpty => {
+                msg_send_channel.send(crate::ui::Message::Synced).await.unwrap();
+            }
+        }
+    }
+    log::error!("Sync suspended");
+    Ok(())
+}
+
+async fn send_message(
+    msg_send_channel: UnboundedSender<crate::ui::Message>,
+    manager: Manager,
+    message: Arc<SendMessageInfo>,
+    markdown: bool,
+    parallel: bool,
+) {
+    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+    if !parallel {
+        for group in message.groups.iter() {
+            loop {
+                match send_message_inner(
+                    manager.clone(),
+                    group,
+                    &message.content,
+                    markdown,
+                ).await {
+                    Ok(_) => {
+                        message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                        send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+                        break;
+                    }
+                    Err(e) => {
+                        message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                        send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    else {
+        futures::future::join_all(
+            message.groups.iter()
+            .map(|group| async {
+                loop {
+                    match send_message_inner(
+                        manager.clone(),
+                        group,
+                        &message.content,
+                        markdown,
+                    ).await {
+                        Ok(_) => {
+                            message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                            send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+                            break;
+                        }
+                        Err(e) => {
+                            message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                            send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
+                        }
+                    }
+                }
+            })
+        ).await;
+    }
+    message.set_status(SendStatus::Sent, std::sync::atomic::Ordering::Relaxed);
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+}
+
+async fn send_message_inner(
+    mut manager: Manager,
+    group: &GroupInfo,
+    message: &str,
+    markdown: bool,
+) -> anyhow::Result<()> {
+    let mut message = if markdown {
+        let (message, ranges) = crate::message::parse_message_with_format(message)?;
+        DataMessage {
+            body: Some(message),
+            body_ranges: ranges,
+            ..Default::default()
+        }
+    }
+    else {
+        DataMessage {
+            body: Some(message.to_owned()),
+            ..Default::default()
+        }
+    };
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    message.group_v2 = Some(GroupContextV2 {
+        master_key: Some(group.key.to_vec()),
+        revision: Some(0),
+        ..Default::default()
+    });
+    message.timestamp = Some(timestamp);
+
+    manager.send_message_to_group(
+        &group.key,
+        message,
+        timestamp
+    ).await?;
+
+    group.set_timestamp(timestamp, std::sync::atomic::Ordering::Relaxed);
+
+    Ok(())
+}
+
+fn send_ui_message(
+    mut msg_send_channel: UnboundedSender<crate::ui::Message>,
+    message: impl Into<ui::Message> + 'static + Send
+) {
+    tokio::spawn(async move { msg_send_channel.send(message.into()).await.unwrap() });
+}
