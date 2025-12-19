@@ -153,8 +153,12 @@ impl App {
                 ])
             },
             Message::UpdateGroupList => {
-                let manager = self.manager.as_ref().unwrap().clone();
-                Task::perform(crate::signal::get_groups(manager), |v| v.map(main_screen::Message::SetGroups).into())
+                if let Some(manager) = self.manager.as_ref() {
+                    Task::perform(crate::signal::get_groups(manager.clone()), |v| v.map(main_screen::Message::SetGroups).into())
+                }
+                else {
+                    Task::none()
+                }
             },
             Message::SendMessage(message) => {
                 Task::done(SignalMessage::SendMessage(self.manager.as_ref().unwrap().clone(), message, self.sett_scr.markdown, self.sett_scr.parallel).into())
