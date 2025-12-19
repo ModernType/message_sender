@@ -79,8 +79,8 @@ impl App {
         Self {
             manager: None,
             cur_screen: Screen::Main,
-            main_scr: MainScreen::new(data.autosend, groups),
-            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.send_mode),
+            main_scr: MainScreen::new(data.autosend, groups, data.history_len),
+            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.send_mode, data.history_len),
             signal_task_send: None,
             sync_interval: data.sync_interval,
             now: Instant::now(),
@@ -102,6 +102,9 @@ impl App {
             sync_interval: self.sync_interval,
             markdown: self.sett_scr.markdown,
             parallel: self.sett_scr.parallel,
+            send_mode: self.sett_scr.send_mode,
+            history_len: self.sett_scr.history_len,
+            recieve_address: self.sett_scr.recieve_address,
             ..Default::default()
         };
         data.save()
@@ -271,6 +274,7 @@ pub struct AppData<'a> {
     pub send_timeout: u64,
     pub markdown: bool,
     pub parallel: bool,
+    pub history_len: u32
 }
 
 impl Default for AppData<'_> {
@@ -284,6 +288,7 @@ impl Default for AppData<'_> {
             send_timeout: 90,
             markdown: true,
             parallel: false,
+            history_len: 20,
         }
     }
 }

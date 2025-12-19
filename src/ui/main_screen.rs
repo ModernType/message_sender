@@ -27,6 +27,7 @@ pub enum Message {
     ShowMessageHistory(bool),
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>),
+    SetHistoryLimit(u32),
 }
 
 impl From<Message> for MainMessage {
@@ -44,13 +45,15 @@ pub(super) struct MainScreen {
     groups: HashMap<[u8; 32], Group>,
     message_history: VecDeque<Arc<SendMessageInfo>>,
     show_message_history: bool,
+    history_limit: u32,
 }
 
 impl MainScreen {
-    pub fn new(autosend: bool, groups: HashMap<[u8; 32], Group>) -> Self {
+    pub fn new(autosend: bool, groups: HashMap<[u8; 32], Group>, history_limit: u32) -> Self {
         Self {
             autosend,
             groups,
+            history_limit,
             ..Default::default()
         }
     }
@@ -80,6 +83,9 @@ impl MainScreen {
             Message::SetAutoSend(autosend) => {
                 self.autosend = autosend;
             },
+            Message::SetHistoryLimit(limit) => {
+                self.history_limit = limit;
+            },
             Message::TextEdit(action) => {
                 self.message_content.perform(action);
             },
@@ -97,6 +103,10 @@ impl MainScreen {
                     }
                 }
                 let message = Arc::new(message);
+
+                if self.message_history.len() >= self.history_limit as usize {
+                    self.message_history.pop_back();
+                }
                 self.message_history.push_front(message.clone());
 
                 return Task::batch([

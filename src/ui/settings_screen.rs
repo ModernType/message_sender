@@ -2,7 +2,7 @@ use std::net::SocketAddrV4;
 
 use iced::{Alignment, Element, Length, Task, widget::{Column, button, checkbox, column, scrollable, svg, text, text_input}};
 
-use crate::ui::SendMode;
+use crate::ui::{SendMode, main_screen};
 
 use super::Message as MainMessage;
 
@@ -12,6 +12,7 @@ pub enum Message {
     ToggleMarkdown(bool),
     ToggleParallel(bool),
     RecieveAddressEditChanged(String),
+    HistoryLenEdit(String),
 }
 
 impl From<Message> for MainMessage {
@@ -27,16 +28,18 @@ pub(super) struct SettingsScreen {
     recieve_address_edit: String,
     pub recieve_address: SocketAddrV4,
     pub send_mode: SendMode,
+    pub history_len: u32,
 }
 
 impl SettingsScreen {
-    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, send_mode: SendMode) -> Self {
+    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, send_mode: SendMode, history_len: u32) -> Self {
         Self {
             markdown,
             parallel,
             recieve_address,
             recieve_address_edit: recieve_address.to_string(),
             send_mode,
+            history_len,
         }
     }
 
@@ -54,6 +57,12 @@ impl SettingsScreen {
                     self.recieve_address = addr;
                 }
                 self.recieve_address_edit = recieve_address_edit;
+            },
+            Message::HistoryLenEdit(text) => {
+                if let Ok(num) = text.parse::<u32>() {
+                    self.history_len = num;
+                    return Task::done(main_screen::Message::SetHistoryLimit(num).into());
+                }
             }
         }
 
@@ -85,6 +94,13 @@ impl SettingsScreen {
                         text("Адреса серверу для прийому повідомлень"),
                         text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
                         .on_input(Message::RecieveAddressEditChanged)
+                    ]
+                )
+                .push(
+                    column![
+                        text("Кількість повідомлень в історії"),
+                        text_input("Кількість повідомлень в історії", &self.history_len.to_string())
+                        .on_input(Message::HistoryLenEdit)
                     ]
                 )
                 .push(
