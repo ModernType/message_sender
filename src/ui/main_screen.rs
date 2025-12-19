@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
-use iced::{Alignment, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, theme, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
 use crate::{signal::SignalMessage, ui::{ext::ColorExt, message_history::SendMessageInfo}};

@@ -1,20 +1,22 @@
 use std::{
-    borrow::Cow, collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc
+    borrow::Cow, collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
 };
 use derive_more::Display;
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Element, Subscription, Task};
+use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, float, text}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 
-use crate::{signal::{SignalMessage, SignalWorker}, ui::{main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
+use crate::{signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
 pub mod main_screen;
 pub mod settings_screen;
 pub mod message_history;
 mod ext;
+
+const NOTIFICATION_SHOW_TIME: u64 = 3000;
 
 #[derive(Debug, Clone)]
 pub enum Screen {
@@ -37,6 +39,7 @@ pub enum Message {
     UpdateGroupList,
     Synced,
     Notification(String),
+    NotificationClose,
     None,
 }
 
@@ -54,6 +57,8 @@ pub struct App {
     sett_scr: SettingsScreen,
     signal_task_send: Option<UnboundedSender<SignalMessage>>,
     sync_interval: u64,
+    now: Instant,
+    notification: Notification,
 }
 
 impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
@@ -76,6 +81,8 @@ impl App {
             sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address),
             signal_task_send: None,
             sync_interval: data.sync_interval,
+            now: Instant::now(),
+            notification: Notification::new(),
         }
     }
 
@@ -91,7 +98,9 @@ impl App {
         data.save()
     }
 
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
+        self.now = now;
+
         match message {
             Message::MainScrMessage(m) => self.main_scr.update(m),
             Message::SettingsScrMessage(m) => self.sett_scr.update(m),
@@ -148,6 +157,15 @@ impl App {
             }
             Message::Notification(e) => {
                 log::warn!("{e}");
+                self.notification.set_text(e);
+                self.notification.show(now);
+                Task::perform(tokio::time::sleep(Duration::from_millis(NOTIFICATION_SHOW_TIME)), |_| Message::NotificationClose)
+            },
+            Message::NotificationClose => {
+                // if !self.notification.is_animating(now) && self.notification.is_open() {
+                if self.notification.is_open() {
+                    self.notification.close(now);
+                }
                 Task::none()
             },
             Message::None => Task::none(),
@@ -155,10 +173,19 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        match self.cur_screen {
-            Screen::Main => self.main_scr.view().map(Into::into),
-            Screen::Settings => self.sett_scr.view().map(Into::into),
-        }
+        Stack::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .push(
+            match self.cur_screen {
+                Screen::Main => self.main_scr.view().map(Into::into),
+                Screen::Settings => self.sett_scr.view().map(Into::into),
+            }
+        )
+        .push(
+            self.notification.view(self.now)
+        )
+        .into()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -166,6 +193,7 @@ impl App {
             Subscription::run(Self::setup_subscription),
             iced::time::every(std::time::Duration::from_secs(self.sync_interval)).map(|_| Message::UpdateGroupList),
             iced::window::close_requests().map(|_| Message::OnClose),
+            // if self.notification.is_animating(self.now) { iced::window::frames().map(|_| Message::None) } else { Subscription::none() },
         ])
     }
 
@@ -245,4 +273,73 @@ pub enum SendMode {
     Standard,
     Frequency,
     Plain
+}
+
+#[derive(Debug)]
+struct Notification {
+    text: String,
+    open: bool,
+    // open: Animation<bool>
+}
+
+impl Notification {
+    pub fn new() -> Self {
+        Self {
+            text: String::new(),
+            open: false,
+            // open: Animation::new(false)
+            //       .quick()
+            //       .easing(Easing::EaseInOut)
+        }
+    }
+
+    pub fn set_text(&mut self, text: String) {
+        self.text = text
+    }
+
+    // pub fn is_animating(&self, now: Instant) -> bool {
+    //     self.open.is_animating(now)
+    // }
+
+    pub fn is_open(&self) -> bool {
+        // self.open.value()
+        self.open
+    }
+
+    pub fn show(&mut self, now: Instant) {
+        // self.open.go_mut(true, now);
+        self.open = true;
+    }
+
+    pub fn close(&mut self, now: Instant) {
+        // self.open.go_mut(false, now);
+        self.open = false;
+    }
+
+    pub fn view(&self, now: Instant) -> Element<'_, Message> {
+        container(
+            container(
+                text(&self.text)
+                .align_y(Alignment::Center)
+                .width(Length::Fill)
+                .height(Length::Fill)
+            )
+            .padding(Padding::ZERO.horizontal(10))
+            // .height(self.open.interpolate(0.0, 80.0, now))
+            .height(if self.open { 40 } else { 0 })
+            .width(Length::Fill)
+            .style(|theme: &iced::Theme| {
+                let palette = theme.palette();
+                container::Style { text_color: Some(palette.text),
+                    background: Some(palette.background.lighter(0.25).into()),
+                    border: Border::default().rounded(5),
+                    ..Default::default()
+                }
+            })
+        )
+        .padding(10)
+        .align_bottom(Length::Fill)
+        .width(Length::Fill)
+        .into()
+    }
 }

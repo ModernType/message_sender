@@ -23,13 +23,13 @@ fn main() {
     ])
     .unwrap();
 
-    iced::application(
+    iced::application::timed(
         App::new,
         App::update,
-        App::view
+        App::subscription,
+        App::view,
     )
     .title("Modern Sender")
-    .subscription(App::subscription)
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
     .default_font(iced::Font::with_name("Roboto"))
