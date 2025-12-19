@@ -164,6 +164,7 @@ impl App {
                 Task::done(SignalMessage::SendMessage(self.manager.as_ref().unwrap().clone(), message, self.sett_scr.markdown, self.sett_scr.parallel).into())
             },
             Message::DeleteMessage(message) => {
+                message.set_status(message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
                 Task::done(SignalMessage::DeleteMessage(self.manager.as_ref().unwrap().clone(), message).into())
             },
             Message::EditMessage(message, timestamps) => {
