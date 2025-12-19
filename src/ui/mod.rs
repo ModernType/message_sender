@@ -17,7 +17,7 @@ pub mod message_history;
 mod ext;
 
 #[derive(Debug, Clone)]
-enum Screen {
+pub enum Screen {
     Main,
     Settings,
 }
@@ -30,6 +30,8 @@ pub enum Message {
     SetManager(Manager<SqliteStore, Registered>),
     SetupSignalWorker(UnboundedSender<Message>),
     SendMessage(Arc<SendMessageInfo>),
+    DeleteMessage(Arc<SendMessageInfo>),
+    EditMessage(Arc<SendMessageInfo>),
     SetScreen(Screen),
     OnClose,
     UpdateGroupList,
@@ -132,6 +134,12 @@ impl App {
             },
             Message::SendMessage(message) => {
                 Task::done(SignalMessage::SendMessage(self.manager.as_ref().unwrap().clone(), message, self.sett_scr.markdown, self.sett_scr.parallel).into())
+            },
+            Message::DeleteMessage(message) => {
+                Task::done(SignalMessage::DeleteMessage(self.manager.as_ref().unwrap().clone(), message).into())
+            },
+            Message::EditMessage(_message) => {
+                todo!()
             },
             Message::OnClose => {
                 log::warn!("Closing application, saving data...");

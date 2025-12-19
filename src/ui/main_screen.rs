@@ -1,10 +1,9 @@
-use std::{collections::{HashMap, VecDeque}, ops::Deref, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
-use iced::{Color, Element, Length, Task, alignment::Horizontal, widget::{Column, Row, Text, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
-use presage::model::groups;
+use iced::{Alignment, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, theme, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{signal::SignalMessage, ui::message_history::SendMessageInfo};
+use crate::{signal::SignalMessage, ui::{ext::ColorExt, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -24,6 +23,9 @@ pub enum Message {
     UpdateGroups,
     UpdateMessageHistory,
     Settings,
+    ShowMessageHistory(bool),
+    DeleteMessage(Arc<SendMessageInfo>),
+    EditMessage(Arc<SendMessageInfo>),
 }
 
 impl From<Message> for MainMessage {
@@ -40,6 +42,7 @@ pub(super) struct MainScreen {
     message_content: text_editor::Content,
     groups: HashMap<[u8; 32], Group>,
     message_history: VecDeque<Arc<SendMessageInfo>>,
+    show_message_history: bool,
 }
 
 impl MainScreen {
@@ -118,6 +121,15 @@ impl MainScreen {
             },
             Message::Settings => {
                 return Task::done(MainMessage::SetScreen(super::Screen::Settings));
+            },
+            Message::ShowMessageHistory(state) => {
+                self.show_message_history = state;
+            },
+            Message::DeleteMessage(message) => {
+                return Task::done(MainMessage::DeleteMessage(message))
+            },
+            Message::EditMessage(_message) => {
+
             }
         }
 
@@ -144,11 +156,11 @@ impl MainScreen {
     pub fn view(&self) -> Element<'_, Message> {
         Row::new()
         .spacing(10)
-        .padding(20)
         .push(
             Column::new()
-            .width(Length::FillPortion(1))
+            .width(Length::FillPortion(2))
             .spacing(20)
+            .padding(10)
             .align_x(Horizontal::Center)
             .push(
                 text("Modern Sender")
@@ -171,12 +183,13 @@ impl MainScreen {
                     )
                     .style(button::text)
                     .on_press(Message::Settings)
+                    .width(Length::Shrink)
                 )
                 .push(
                     match self.link_state {
-                        LinkState::Unlinked => button("Приєднати пристрій").on_press(Message::LinkBegin),
-                        LinkState::Linking => button("Приєднати пристрій").on_press_maybe(None),
-                        LinkState::Linked => button("Оновити групи").on_press(Message::UpdateGroups),
+                        LinkState::Unlinked => button(text("Приєднати пристрій").width(Length::Fill).center()).on_press(Message::LinkBegin),
+                        LinkState::Linking => button(text("Приєднати пристрій").width(Length::Fill).center()).on_press_maybe(None),
+                        LinkState::Linked => button(text("Оновити групи").width(Length::Fill).center()).on_press(Message::UpdateGroups),
                     }
                 )
             )
@@ -191,7 +204,7 @@ impl MainScreen {
         )
         .push(
             Column::new()
-            .width(Length::FillPortion(3))
+            .width(Length::FillPortion(6))
             .height(Length::Fill)
             .align_x(Horizontal::Center)
             .spacing(10)
@@ -224,17 +237,90 @@ impl MainScreen {
             
         )
         .push(
-            scrollable(
-                self.message_history.iter().fold(
-                    Column::new()
-                    .spacing(5)
-                    .width(Length::FillPortion(1))
-                    .height(Length::Fill),
-                    |col, msg_info| {
-                        col.push(msg_info.deref())
-                    }
+            if self.show_message_history {
+                Element::new(
+                    Row::new()
+                    .width(Length::FillPortion(3))
+                    .align_y(Alignment::Center)
+                    .push(
+                        button(text(">").center())
+                        .height(80)
+                        .style(|theme: &iced::Theme, _status| {
+                            let palette = theme.palette();
+                            button::Style {
+                                background: Some(palette.background.darker(0.1).into()),
+                                border: Border {
+                                    width: 0.0,
+                                    color: palette.text,
+                                    radius: Radius {
+                                        top_left: 10.0,
+                                        bottom_left: 10.0,
+                                        top_right: 0.0,
+                                        bottom_right: 0.0,
+                                    },
+                                    ..Default::default()
+                                },
+                                text_color: palette.text,
+                                ..Default::default()
+                            }
+                        })
+                        .on_press(Message::ShowMessageHistory(false))   
+                    )
+                    .push(
+                        scrollable(
+                            self.message_history.iter().fold(
+                                Column::new()
+                                .padding(10)
+                                .spacing(3)
+                                .width(Length::Fill)
+                                .height(Length::Fill),
+                                |col, message_info| {
+                                    col.push(
+                                        message_info.view()
+                                    )
+                                }
+                            )
+                        )
+                        .style(|theme, status| scrollable::Style {
+                            container: container::Style {
+                                background: Some(theme.palette().background.darker(0.1).into()),
+                                ..Default::default()
+                            },
+                            ..scrollable::default(theme, status)
+                        })
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                    )
                 )
-            )
+            }
+            else {
+                container(
+                    button(text("<").center())
+                    .height(80)
+                    .style(|theme: &iced::Theme, _status| {
+                        let palette = theme.palette();
+                        button::Style {
+                            background: Some(palette.background.darker(0.1).into()),
+                            border: Border {
+                                width: 0.0,
+                                color: palette.text,
+                                radius: Radius {
+                                    top_left: 10.0,
+                                    bottom_left: 10.0,
+                                    top_right: 0.0,
+                                    bottom_right: 0.0,
+                                },
+                                ..Default::default()
+                            },
+                            text_color: palette.text,
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(Message::ShowMessageHistory(true))
+                )
+                .center_y(Length::Fill)
+                .into()
+            }
         )
         .into()
     }

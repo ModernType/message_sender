@@ -2,7 +2,7 @@ use std::{sync::Arc, time::{Duration, SystemTime}};
 
 use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
 use log::{info, warn};
-use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, GroupContextV2}, store::ContentsStore};
+use presage::{libsignal_service::configuration::SignalServers, manager::{self, Registered}, proto::{DataMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::LocalSet;
 
@@ -16,6 +16,7 @@ pub enum SignalMessage {
     Sync(Manager),
     // GetGroups,
     SendMessage(Manager, Arc<SendMessageInfo>, bool, bool),
+    DeleteMessage(Manager, Arc<SendMessageInfo>),
 }
 
 pub struct SignalWorker {
@@ -61,6 +62,9 @@ impl SignalWorker {
                 },
                 SignalMessage::SendMessage(manager, message, markdown, parallel) => {
                     send_message(ui_message_sender.clone(), manager, message, markdown, parallel).await;
+                },
+                SignalMessage::DeleteMessage(manager, message) => {
+                    delete_message(ui_message_sender.clone(), manager, message).await;
                 }
             };
         }
@@ -263,6 +267,57 @@ async fn send_message_inner(
     group.set_timestamp(timestamp, std::sync::atomic::Ordering::Relaxed);
 
     Ok(())
+}
+
+async fn delete_message(
+    msg_send_channel: UnboundedSender<crate::ui::Message>,
+    mut manager: Manager,
+    message: Arc<SendMessageInfo>,
+) {
+    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+    
+    for group in message.groups.iter() {
+        let target_timestamp = group.timestamp(std::sync::atomic::Ordering::Relaxed).unwrap();
+        let cur_timestamp = std::time::SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
+        let delete_message = DataMessage {
+            delete: Some(Delete {
+                target_sent_timestamp: Some(target_timestamp),
+            }),
+            group_v2: Some(GroupContextV2 {
+                master_key: Some(group.key.to_vec()),
+                revision: Some(0),
+                ..Default::default()
+            }),
+            timestamp: Some(cur_timestamp),
+            ..Default::default()
+        };
+
+        loop {
+            match manager.send_message_to_group(
+                &group.key,
+                delete_message.clone(),
+                cur_timestamp
+            ).await {
+                Ok(_) => {
+                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+                    break;
+                }
+                Err(e) => {
+                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
+                }
+            }
+        }
+    }
+
+    message.set_status(SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
 }
 
 fn send_ui_message(

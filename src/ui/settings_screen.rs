@@ -1,6 +1,6 @@
 use std::net::SocketAddrV4;
 
-use iced::{Alignment, Element, Length, Task, widget::{Column, Row, Stack, button, checkbox, column, container, scrollable, space, svg, text, text_input}};
+use iced::{Alignment, Element, Length, Task, widget::{Column, button, checkbox, column, scrollable, svg, text, text_input}};
 
 use super::Message as MainMessage;
 
