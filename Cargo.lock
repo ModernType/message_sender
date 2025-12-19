@@ -3552,6 +3552,7 @@ dependencies = [
  "reqwest",
  "ron",
  "serde",
+ "serde_json",
  "simplelog",
  "tokio",
  "unicode-segmentation",

@@ -6,6 +6,7 @@ use crate::ui::App;
 mod ui;
 mod message;
 mod signal;
+mod message_server;
 #[cfg(test)]
 mod test;
 

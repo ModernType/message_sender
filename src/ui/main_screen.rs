@@ -16,7 +16,8 @@ pub enum Message {
     SetLinkState(LinkState),
     SetAutoSend(bool),
     TextEdit(text_editor::Action),
-    SendMessage,
+    SendMessage(String),
+    SendMessagePressed,
     LinkBegin,
     ToggleGroup(Key, bool),
     SetGroups(Vec<(Key, String)>),
@@ -82,9 +83,13 @@ impl MainScreen {
             Message::TextEdit(action) => {
                 self.message_content.perform(action);
             },
-            Message::SendMessage => {
-                let mut message = SendMessageInfo::new(self.message_content.text());
+            Message::SendMessagePressed => {
+                let text = self.message_content.text();
                 self.message_content = text_editor::Content::new();
+                return Task::done(Message::SendMessage(text).into())
+            }
+            Message::SendMessage(message) => {
+                let mut message = SendMessageInfo::new(message);
                 
                 for (key, group) in self.groups.iter() {
                     if group.active {
@@ -226,7 +231,7 @@ impl MainScreen {
                     })
                 )
                 .on_press_maybe(
-                    (self.link_state == LinkState::Linked).then_some(Message::SendMessage)
+                    (self.link_state == LinkState::Linked).then_some(Message::SendMessagePressed)
                 )
             )
             .push(

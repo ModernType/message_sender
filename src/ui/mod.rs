@@ -3,11 +3,11 @@ use std::{
 };
 use derive_more::Display;
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, float, text}};
+use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, float, text, text_editor}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
-use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
+use crate::{message::OperatorMessage, message_server};
 
 use crate::{signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -35,6 +35,7 @@ pub enum Message {
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>),
     SetScreen(Screen),
+    AcceptMessage(String),
     OnClose,
     UpdateGroupList,
     Synced,
@@ -78,7 +79,7 @@ impl App {
             manager: None,
             cur_screen: Screen::Main,
             main_scr: MainScreen::new(data.autosend, groups),
-            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address),
+            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.send_mode),
             signal_task_send: None,
             sync_interval: data.sync_interval,
             now: Instant::now(),
@@ -132,10 +133,13 @@ impl App {
             }
             Message::SetupSignalWorker(tx) => {
                 let (task_tx, task_rx) = futures::channel::mpsc::unbounded();
-                SignalWorker::spawn_new(task_rx, tx);
+                SignalWorker::spawn_new(task_rx, tx.clone());
                 self.signal_task_send = Some(task_tx);
 
-                Task::done(SignalMessage::LinkBegin.into())
+                Task::batch([
+                    Task::done(SignalMessage::LinkBegin.into()),
+                    Task::perform(message_server::start_server(self.sett_scr.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
+                ])
             },
             Message::UpdateGroupList => {
                 let manager = self.manager.as_ref().unwrap().clone();
@@ -149,6 +153,41 @@ impl App {
             },
             Message::EditMessage(_message) => {
                 todo!()
+            },
+            Message::AcceptMessage(message) => {
+                let autosend = self.main_scr.autosend();
+                let send_mode = self.sett_scr.send_mode;
+
+                let messages: Vec<String> = match send_mode {
+                SendMode::Standard => {
+                    match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
+                        Ok(messages) => messages.iter().map(OperatorMessage::to_string).collect(),
+                        Err(e) => {
+                            return Task::done(Message::Notification(format!("Error to parse messages: {}\nOriginal body: {}", &e, message)));
+                        }
+                    }
+                },
+                SendMode::Frequency => {
+                    match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
+                        Ok(messages) => messages.iter().map(OperatorMessage::with_frequency).collect(),
+                        Err(e) => {
+                            return Task::done(Message::Notification(format!("Error to parse messages: {}\nOriginal body: {}", &e, message)));
+                        }
+                    }
+                }
+                SendMode::Plain => {
+                    vec![message]
+                }
+            };
+            if autosend {
+                Task::batch(
+                    messages.into_iter().map(|s| Task::done(main_screen::Message::SendMessage(s).into()))
+                )
+            }
+            else {
+                let message = messages.join("\n");
+                Task::done(main_screen::Message::TextEdit(text_editor::Action::Edit(text_editor::Edit::Paste(Arc::new(message)))).into())
+            }
             },
             Message::OnClose => {
                 log::warn!("Closing application, saving data...");
