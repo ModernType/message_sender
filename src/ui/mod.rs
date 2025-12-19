@@ -60,6 +60,7 @@ pub struct App {
     sync_interval: u64,
     now: Instant,
     notification: Notification,
+    theme: iced::Theme,
 }
 
 impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
@@ -84,6 +85,13 @@ impl App {
             sync_interval: data.sync_interval,
             now: Instant::now(),
             notification: Notification::new(),
+            theme: {
+                match dark_light::detect().unwrap_or(dark_light::Mode::Unspecified) {
+                    dark_light::Mode::Light => iced::Theme::CatppuccinLatte,
+                    dark_light::Mode::Dark => iced::Theme::Dracula,
+                    dark_light::Mode::Unspecified => iced::Theme::CatppuccinLatte,
+                }
+            }
         }
     }
 
@@ -248,11 +256,7 @@ impl App {
     }
 
     pub fn theme(&self) -> iced::Theme {
-        match dark_light::detect().unwrap_or(dark_light::Mode::Unspecified) {
-            dark_light::Mode::Light => iced::Theme::CatppuccinLatte,
-            dark_light::Mode::Dark => iced::Theme::Dracula,
-            dark_light::Mode::Unspecified => iced::Theme::CatppuccinLatte,
-        }
+        self.theme.clone()
     }
 }
 
