@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc};
 use iced::{Alignment, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{signal::SignalMessage, ui::{ext::ColorExt, message_history::SendMessageInfo}};
+use crate::{signal::SignalMessage, ui::{ext::ColorExt, message_history::{GroupInfo, SendMessageInfo}}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -25,8 +25,10 @@ pub enum Message {
     UpdateMessageHistory,
     Settings,
     ShowMessageHistory(bool),
-    DeleteMessage(Arc<SendMessageInfo>),
-    EditMessage(Arc<SendMessageInfo>),
+    DeleteMessage(usize),
+    EditMessage(usize),
+    CancelEdit,
+    ConfirmEdit,
     SetHistoryLimit(u32),
 }
 
@@ -42,10 +44,11 @@ pub(super) struct MainScreen {
     link_state: LinkState,
     autosend: bool,
     message_content: text_editor::Content,
-    groups: HashMap<[u8; 32], Group>,
-    message_history: VecDeque<Arc<SendMessageInfo>>,
+    pub groups: HashMap<[u8; 32], Group>,
+    pub message_history: VecDeque<Arc<SendMessageInfo>>,
     show_message_history: bool,
     history_limit: u32,
+    edit: Option<Arc<SendMessageInfo>>,
 }
 
 impl MainScreen {
@@ -140,12 +143,41 @@ impl MainScreen {
             Message::ShowMessageHistory(state) => {
                 self.show_message_history = state;
             },
-            Message::DeleteMessage(message) => {
-                return Task::done(MainMessage::DeleteMessage(message))
+            Message::DeleteMessage(idx) => {
+                return Task::done(MainMessage::DeleteMessage(Arc::clone(&self.message_history[idx])))
             },
-            Message::EditMessage(_message) => {
+            Message::EditMessage(idx) => {
+                let message = self.message_history.remove(idx).unwrap();
+                let content = text_editor::Content::with_text(&message.content);
+                self.message_content = content;
+                self.edit = Some(message);
+            },
+            Message::CancelEdit => {
+                self.message_content = text_editor::Content::new();
+                if self.message_history.len() >= self.history_limit as usize {
+                    self.message_history.pop_back();
+                }
+                self.message_history.push_front(
+                    self.edit.take().unwrap()
+                );
+            },
+            Message::ConfirmEdit => {
+                let mut arc_message = self.edit.take().unwrap();
+                let message = Arc::get_mut(&mut arc_message).unwrap();
+                let timestamps = message.groups.iter().map(|group| group.timestamp.swap(0, std::sync::atomic::Ordering::Relaxed)).collect();
+                let new_message = self.message_content.text();
+                self.message_content = text_editor::Content::new();
 
-            }
+                message.content = new_message;
+                message.set_status(super::message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
+
+                if self.message_history.len() >= self.history_limit as usize {
+                    self.message_history.pop_back();
+                }
+                self.message_history.push_front(arc_message.clone());
+
+                return Task::done(MainMessage::EditMessage(arc_message, timestamps));
+            },
         }
 
         Task::none()
@@ -238,18 +270,45 @@ impl MainScreen {
                 .on_action(Message::TextEdit)
             )
             .push(
-                button(
-                    text("Надіслати повідомлення")
-                    .center()
-                    .width(Length::Fill)
-                    .font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..iced::Font::DEFAULT
-                    })
-                )
-                .on_press_maybe(
-                    (self.link_state == LinkState::Linked).then_some(Message::SendMessagePressed)
-                )
+                if let Some(_message) = self.edit.as_ref() {
+                    Element::from(
+                        Row::new()
+                        .spacing(5)
+                        .push(
+                            button(
+                                text("Відмінити")
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .style(button::secondary)
+                            .on_press(Message::CancelEdit)
+                        )
+                        .push(
+                            button(
+                                text("Редагувати")
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .on_press(Message::ConfirmEdit)
+                        )
+                    )
+                }
+                else {
+                    Element::from(
+                        button(
+                            text("Надіслати повідомлення")
+                            .center()
+                            .width(Length::Fill)
+                            .font(iced::Font {
+                                weight: iced::font::Weight::Bold,
+                                ..iced::Font::DEFAULT
+                            })
+                        )
+                        .on_press_maybe(
+                            (self.link_state == LinkState::Linked).then_some(Message::SendMessagePressed)
+                        )
+                    )
+                }
             )
             .push(
                 checkbox(self.autosend)
@@ -290,15 +349,15 @@ impl MainScreen {
                     )
                     .push(
                         scrollable(
-                            self.message_history.iter().fold(
+                            self.message_history.iter().enumerate().fold(
                                 Column::new()
                                 .padding(10)
                                 .spacing(3)
                                 .width(Length::Fill)
                                 .height(Length::Fill),
-                                |col, message_info| {
+                                |col, (idx, message_info)| {
                                     col.push(
-                                        message_info.view()
+                                        message_info.view(idx)
                                     )
                                 }
                             )

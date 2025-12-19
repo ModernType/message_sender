@@ -37,7 +37,7 @@ impl From<u8> for SendStatus {
 pub struct GroupInfo {
     pub key: [u8; 32],
     pub title: String,
-    timestamp: AtomicU64,
+    pub(super) timestamp: AtomicU64,
 }
 
 impl Clone for GroupInfo {
@@ -115,7 +115,7 @@ impl SendMessageInfo {
         (Arc::clone(&self), groups)
     }
 
-    pub fn view<'a>(self: &'a Arc<Self>) -> Element<'a, super::main_screen::Message, Theme> {
+    pub fn view<'a>(self: &'a Arc<Self>, idx: usize) -> Element<'a, super::main_screen::Message, Theme> {
         let status_color = match self.status.load(Ordering::Relaxed) {
             0 => Some(iced::Color::from_rgb(0.3, 0.3, 0.3)),
             1 => None,
@@ -180,14 +180,14 @@ impl SendMessageInfo {
                         svg(svg::Handle::from_memory(include_bytes!("icons/delete.svg")))
                     )
                     .style(button::danger)
-                    .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::DeleteMessage(Arc::clone(self))))
+                    .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::DeleteMessage(idx)))
                 )
                 .push(
                     button(
                         svg(svg::Handle::from_memory(include_bytes!("icons/edit.svg")))
                     )
                     .style(button::primary)
-                    .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::EditMessage(Arc::clone(self))))
+                    .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::EditMessage(idx)))
                 )
             )
         )

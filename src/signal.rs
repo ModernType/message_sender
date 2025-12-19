@@ -1,8 +1,9 @@
 use std::{sync::Arc, time::SystemTime};
 
 use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
+use iced::message;
 use log::{info, warn};
-use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
+use presage::{libsignal_service::configuration::SignalServers, manager::{self, Registered}, proto::{DataMessage, EditMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::LocalSet;
 
@@ -17,6 +18,7 @@ pub enum SignalMessage {
     // GetGroups,
     SendMessage(Manager, Arc<SendMessageInfo>, bool, bool),
     DeleteMessage(Manager, Arc<SendMessageInfo>),
+    EditMessage(Manager, Arc<SendMessageInfo>, Vec<u64>, bool)
 }
 
 pub struct SignalWorker {
@@ -65,6 +67,9 @@ impl SignalWorker {
                 },
                 SignalMessage::DeleteMessage(manager, message) => {
                     delete_message(ui_message_sender.clone(), manager, message).await;
+                },
+                SignalMessage::EditMessage(manager, message, timestamps, markdown) => {
+                    _ = edit_message(ui_message_sender.clone(), manager, message, timestamps, markdown).await;
                 }
             };
         }
@@ -319,6 +324,73 @@ async fn delete_message(
 
     message.set_status(SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+}
+
+async fn edit_message(
+    msg_send_channel: UnboundedSender<crate::ui::Message>,
+    mut manager: Manager,
+    message: Arc<SendMessageInfo>,
+    timestamps: Vec<u64>,
+    markdown: bool,
+) -> anyhow::Result<()> {
+    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+    for (group, timestamp) in message.groups.iter().zip(timestamps) {
+        let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
+        let mut data_message = if markdown {
+            let (message, ranges) = crate::message::parse_message_with_format(&message.content)?;
+            DataMessage {
+                body: Some(message),
+                body_ranges: ranges,
+                ..Default::default()
+            }
+        }
+        else {
+            DataMessage {
+                body: Some(message.content.clone()),
+                ..Default::default()
+            }
+        };
+        data_message.group_v2 = Some(GroupContextV2 {
+            master_key: Some(group.key.to_vec()),
+            revision: Some(0),
+            ..Default::default()
+        });
+        data_message.timestamp = Some(now);
+        
+        let edit_message = EditMessage {
+            target_sent_timestamp: Some(timestamp),
+            data_message: Some(data_message)
+        };
+        
+        loop {
+            match manager.send_message_to_group(
+                &group.key,
+                edit_message.clone(),
+                now
+            ).await {
+                Ok(_) => {
+                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+                    break;
+                }
+                Err(e) => {
+                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
+                }
+            }
+        }
+
+        group.set_timestamp(now, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    message.set_status(SendStatus::Sent, std::sync::atomic::Ordering::Relaxed);
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+    Ok(())
 }
 
 fn send_ui_message(

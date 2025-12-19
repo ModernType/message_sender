@@ -7,7 +7,7 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server};
+use crate::{message::OperatorMessage, message_server, ui::message_history::GroupInfo};
 
 use crate::{signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -33,7 +33,7 @@ pub enum Message {
     SetupSignalWorker(UnboundedSender<Message>),
     SendMessage(Arc<SendMessageInfo>),
     DeleteMessage(Arc<SendMessageInfo>),
-    EditMessage(Arc<SendMessageInfo>),
+    EditMessage(Arc<SendMessageInfo>, Vec<u64>),
     SetScreen(Screen),
     AcceptMessage(String),
     OnClose,
@@ -166,8 +166,8 @@ impl App {
             Message::DeleteMessage(message) => {
                 Task::done(SignalMessage::DeleteMessage(self.manager.as_ref().unwrap().clone(), message).into())
             },
-            Message::EditMessage(_message) => {
-                todo!()
+            Message::EditMessage(message, timestamps) => {
+                Task::done(SignalMessage::EditMessage(self.manager.as_ref().unwrap().clone(), message, timestamps, self.sett_scr.markdown).into())
             },
             Message::AcceptMessage(message) => {
                 let autosend = self.main_scr.autosend();
