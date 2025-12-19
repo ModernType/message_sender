@@ -53,11 +53,13 @@ impl SignalWorker {
 
     async fn future(mut self) {
         while let Some(m) = self.signal_reciever.next().await {
-            let mut ui_message_sender = self.ui_message_sender.clone();
+            let ui_message_sender = self.ui_message_sender.clone();
             match m {
                 SignalMessage::LinkBegin => {
-                    let result = link(ui_message_sender.clone()).await.map(ui::Message::SetManager);
-                    tokio::spawn(async move { ui_message_sender.send(result.into()).await });
+                    match link(ui_message_sender.clone()).await {
+                        Ok(mng) => send_ui_message(ui_message_sender.clone(), ui::Message::SetManager(mng)),
+                        Err(_e) => send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetLinkState(ui::main_screen::LinkState::Unlinked)),
+                    }
                 },
                 SignalMessage::Sync(mng) => {
                     _ = tokio::task::spawn_local(sync(ui_message_sender.clone(), mng));
