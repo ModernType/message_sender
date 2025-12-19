@@ -305,6 +305,7 @@ async fn delete_message(
             ).await {
                 Ok(_) => {
                     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                    group.set_timestamp(0, std::sync::atomic::Ordering::Relaxed);
                     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
                     break;
                 }
