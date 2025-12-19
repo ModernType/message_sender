@@ -143,15 +143,19 @@ impl MainScreen {
 
     fn group_list(&self) -> Element<'_, Message> {
         scrollable(
-            self.groups.iter().fold(Column::new()
-            .spacing(3),
-            |col, (key, group)| {
-                col.push(
-                    checkbox(group.active)
-                    .label(&group.title)
-                    .on_toggle(move |state| Message::ToggleGroup(key.clone(), state))
-                )
-            })
+            {
+                let mut v = self.groups.iter().collect::<Vec<_>>();
+                v.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
+                v.into_iter().fold(Column::new()
+                .spacing(3),
+                |col, (key, group)| {
+                    col.push(
+                        checkbox(group.active)
+                        .label(&group.title)
+                        .on_toggle(move |state| Message::ToggleGroup(key.clone(), state))
+                    )
+                })
+            }
         )
         .width(Length::Fill)
         .height(Length::Fill)
