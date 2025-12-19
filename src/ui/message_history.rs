@@ -1,6 +1,6 @@
 use std::sync::{Arc, atomic::{AtomicU8, AtomicU64, Ordering}};
 
-use iced::{Border, Element, Font, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
+use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug)]
@@ -91,13 +91,13 @@ impl SendMessageInfo {
         self.groups.iter().filter(|g| g.sent(Ordering::Relaxed)).count()
     }
 
-    pub fn sent(&self) -> bool {
-        self.groups.iter().all(|g| g.sent(Ordering::Relaxed))
-    }
+    // pub fn sent(&self) -> bool {
+    //     self.groups.iter().all(|g| g.sent(Ordering::Relaxed))
+    // }
 
-    pub fn message(&self) -> &str {
-        &self.content
-    }
+    // pub fn message(&self) -> &str {
+    //     &self.content
+    // }
 
     pub fn set_status(&self, status: SendStatus, ordering: Ordering) {
         self.status.store(status as u8, ordering);

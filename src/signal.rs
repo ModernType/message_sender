@@ -1,8 +1,8 @@
-use std::{sync::Arc, time::{Duration, SystemTime}};
+use std::{sync::Arc, time::SystemTime};
 
 use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
 use log::{info, warn};
-use presage::{libsignal_service::configuration::SignalServers, manager::{self, Registered}, proto::{DataMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
+use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::LocalSet;
 

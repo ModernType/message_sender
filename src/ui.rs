@@ -3,7 +3,7 @@ use std::{
 };
 use derive_more::Display;
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, float, text, text_editor}};
+use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, text, text_editor}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
