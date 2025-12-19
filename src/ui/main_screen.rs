@@ -199,6 +199,9 @@ impl MainScreen {
                 .push(
                     button(
                         svg(svg::Handle::from_memory(include_bytes!("icons/settings.svg")))
+                        .style(|theme: &iced::Theme, _status| {
+                            svg::Style { color: Some(theme.palette().text) }
+                        })
                     )
                     .style(button::text)
                     .on_press(Message::Settings)
