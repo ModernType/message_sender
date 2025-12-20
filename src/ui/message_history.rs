@@ -103,18 +103,6 @@ impl SendMessageInfo {
         self.status.store(status as u8, ordering);
     }
 
-    pub fn edit(self: &mut Arc<Self>, new_content: String) -> (Arc<Self>, Vec<GroupInfo>) {
-        let mut info = SendMessageInfo::new(new_content);
-        for group in self.groups.iter() {
-            info.push(group.key, group.title.clone());
-        }
-
-        let groups = self.groups.clone();
-        *self = Arc::new(info);
-
-        (Arc::clone(&self), groups)
-    }
-
     pub fn view<'a>(self: &'a Arc<Self>, idx: usize) -> Element<'a, super::main_screen::Message, Theme> {
         let status_color = match self.status.load(Ordering::Relaxed) {
             0 => Some(iced::Color::from_rgb(0.3, 0.3, 0.3)),
@@ -127,7 +115,7 @@ impl SendMessageInfo {
         let status = SendStatus::from(self.status.load(Ordering::Relaxed));
         container(
             Column::new()
-            .spacing(3)
+            .spacing(5)
             .padding(5)
             .push(
                 text(
@@ -147,7 +135,13 @@ impl SendMessageInfo {
                     ),
                     SendStatus::Deleted => Element::from(
                         text("Видалено")
-                        .color(status_color.unwrap())
+                        .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().danger.base.color) })
+                        .center()
+                        .width(Length::Fill)
+                    ),
+                    SendStatus::Sent => Element::from(
+                        text("Відправлено")
+                        .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) })
                         .center()
                         .width(Length::Fill)
                     ),
@@ -162,11 +156,14 @@ impl SendMessageInfo {
                         .push(
                             progress_bar(0.0 ..= self.groups.len() as f32, sent_count as f32)
                             .length(Length::Fill)
-                            .girth(4)
-                            .style(move |theme: &Theme| progress_bar::Style {
-                                bar: status_color.map(iced::Background::Color).unwrap_or_else(|| theme.palette().text.into()),
-                                background: theme.palette().background.into(),
-                                border: Default::default(),
+                            .girth(5)
+                            .style(move |theme: &Theme| {
+                                let palette = theme.extended_palette();
+                                progress_bar::Style {
+                                    bar: status_color.map(iced::Background::Color).unwrap_or_else(|| palette.background.base.text.into()),
+                                    background: palette.background.base.color.into(),
+                                    border: Border::default().rounded(2.5),
+                                }
                             })
                         )
                     )
@@ -186,7 +183,7 @@ impl SendMessageInfo {
                     button(
                         svg(svg::Handle::from_memory(include_bytes!("icons/edit.svg")))
                     )
-                    .style(button::primary)
+                    .style(button::secondary)
                     .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::EditMessage(idx)))
                 )
             )
@@ -194,16 +191,19 @@ impl SendMessageInfo {
         .padding(3)
         .width(Length::Fill)
         .style(move |theme: &Theme| {
-            let color = if let Some(c) = status_color {
-                c
-            } else {
-                theme.palette().background
+            let palette = theme.extended_palette();
+            let background = match status {
+                SendStatus::Deleted | SendStatus::Failed => palette.danger.weak.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
+                SendStatus::Sending => palette.background.base.color,
+                SendStatus::Sent => palette.success.weak.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
+                SendStatus::Pending => palette.background.base.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
             };
             container::Style {
+                background: Some(background.into()),
                 border: Border{
-                    width: 1.5,
-                    color,
+                    width: 0.,
                     radius: 10.0.into(),
+                    ..Default::default()
                 },
                 ..Default::default()
             }

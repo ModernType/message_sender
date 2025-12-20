@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc};
 use iced::{Alignment, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{signal::SignalMessage, ui::{ext::ColorExt, message_history::{GroupInfo, SendMessageInfo}}};
+use crate::{signal::SignalMessage, ui::{message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -189,7 +189,7 @@ impl MainScreen {
                 let mut v = self.groups.iter().collect::<Vec<_>>();
                 v.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
                 v.into_iter().fold(Column::new()
-                .spacing(3),
+                .spacing(5),
                 |col, (key, group)| {
                     col.push(
                         checkbox(group.active)
@@ -204,9 +204,94 @@ impl MainScreen {
         .into()
     }
 
+    fn message_history(&self) -> Element<'_, Message> {
+        if self.show_message_history {
+            Element::new(
+                Row::new()
+                .width(Length::FillPortion(3))
+                .align_y(Alignment::Center)
+                .push(
+                    button(text(">").center())
+                    .height(80)
+                    .style(|theme: &iced::Theme, _status| {
+                        let palette = theme.extended_palette();
+                        button::Style {
+                            background: Some(palette.background.weaker.color.into()),
+                            border: Border {
+                                radius: Radius {
+                                    top_left: 10.0,
+                                    bottom_left: 10.0,
+                                    top_right: 0.0,
+                                    bottom_right: 0.0,
+                                },
+                                ..Default::default()
+                            },
+                            text_color: palette.background.weaker.text,
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(Message::ShowMessageHistory(false))   
+                )
+                .push(
+                    scrollable(
+                        self.message_history.iter().enumerate().fold(
+                            Column::new()
+                            .padding(10)
+                            .spacing(3)
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                            |col, (idx, message_info)| {
+                                col.push(
+                                    message_info.view(idx)
+                                )
+                            }
+                        )
+                    )
+                    .style(|theme, status| scrollable::Style {
+                        container: container::Style {
+                            background: Some(theme.extended_palette().background.weaker.color.into()),
+                            ..Default::default()
+                        },
+                        ..scrollable::default(theme, status)
+                    })
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                )
+            )
+        }
+        else {
+            container(
+                button(text("<").center())
+                .height(80)
+                .style(|theme: &iced::Theme, _status| {
+                    let palette = theme.extended_palette();
+                    button::Style {
+                        background: Some(palette.background.weakest.color.into()),
+                        border: Border {
+                            width: 0.0,
+                            color: palette.background.weakest.text,
+                            radius: Radius {
+                                top_left: 10.0,
+                                bottom_left: 10.0,
+                                top_right: 0.0,
+                                bottom_right: 0.0,
+                            },
+                            ..Default::default()
+                        },
+                        text_color: palette.background.weakest.text,
+                        ..Default::default()
+                    }
+                })
+                .on_press(Message::ShowMessageHistory(true))
+            )
+            .center_y(Length::Fill)
+            .into()
+        }
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         Row::new()
-        .spacing(10)
+        .spacing(7)
         .push(
             Column::new()
             .width(Length::FillPortion(2))
@@ -214,8 +299,8 @@ impl MainScreen {
             .padding(10)
             .align_x(Horizontal::Center)
             .push(
-                text("Modern Sender")
-                .size(30)
+                text("MODERN SENDER")
+                .size(26)
                 .center()
                 .width(Length::Fill)
                 .color(
@@ -242,9 +327,24 @@ impl MainScreen {
                 .push(
                     match self.link_state {
                         LinkState::Unlinked => button(text("Приєднати пристрій").width(Length::Fill).center()).on_press(Message::LinkBegin),
-                        LinkState::Linking => button(text("Приєднати пристрій").width(Length::Fill).center()).on_press_maybe(None),
+                        LinkState::Linking => button(text("Приєднати пристрій").width(Length::Fill).center()),
                         LinkState::Linked => button(text("Оновити групи").width(Length::Fill).center()).on_press(Message::UpdateGroups),
                     }
+                    .style(
+                        |theme: &iced::Theme, status| {
+                            let palette = theme.extended_palette();
+                            button::Style {
+                                background: match status {
+                                    button::Status::Active => Some(palette.background.strong.color.into()),
+                                    button::Status::Hovered => Some(palette.background.stronger.color.into()),
+                                    button::Status::Pressed | button::Status::Disabled => Some(palette.background.strongest.color.into())
+                                },
+                                text_color: palette.background.strong.text,
+                                border: Border::default().rounded(5),
+                                ..Default::default()
+                            }
+                        }
+                    )
                 )
             )
             .push_maybe(
@@ -270,7 +370,7 @@ impl MainScreen {
                 .on_action(Message::TextEdit)
             )
             .push(
-                if let Some(_message) = self.edit.as_ref() {
+                if self.edit.is_some() {
                     Element::from(
                         Row::new()
                         .spacing(5)
@@ -318,90 +418,7 @@ impl MainScreen {
             
         )
         .push(
-            if self.show_message_history {
-                Element::new(
-                    Row::new()
-                    .width(Length::FillPortion(3))
-                    .align_y(Alignment::Center)
-                    .push(
-                        button(text(">").center())
-                        .height(80)
-                        .style(|theme: &iced::Theme, _status| {
-                            let palette = theme.palette();
-                            button::Style {
-                                background: Some(palette.background.darker(0.1).into()),
-                                border: Border {
-                                    width: 0.0,
-                                    color: palette.text,
-                                    radius: Radius {
-                                        top_left: 10.0,
-                                        bottom_left: 10.0,
-                                        top_right: 0.0,
-                                        bottom_right: 0.0,
-                                    },
-                                    ..Default::default()
-                                },
-                                text_color: palette.text,
-                                ..Default::default()
-                            }
-                        })
-                        .on_press(Message::ShowMessageHistory(false))   
-                    )
-                    .push(
-                        scrollable(
-                            self.message_history.iter().enumerate().fold(
-                                Column::new()
-                                .padding(10)
-                                .spacing(3)
-                                .width(Length::Fill)
-                                .height(Length::Fill),
-                                |col, (idx, message_info)| {
-                                    col.push(
-                                        message_info.view(idx)
-                                    )
-                                }
-                            )
-                        )
-                        .style(|theme, status| scrollable::Style {
-                            container: container::Style {
-                                background: Some(theme.palette().background.darker(0.1).into()),
-                                ..Default::default()
-                            },
-                            ..scrollable::default(theme, status)
-                        })
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                    )
-                )
-            }
-            else {
-                container(
-                    button(text("<").center())
-                    .height(80)
-                    .style(|theme: &iced::Theme, _status| {
-                        let palette = theme.palette();
-                        button::Style {
-                            background: Some(palette.background.darker(0.1).into()),
-                            border: Border {
-                                width: 0.0,
-                                color: palette.text,
-                                radius: Radius {
-                                    top_left: 10.0,
-                                    bottom_left: 10.0,
-                                    top_right: 0.0,
-                                    bottom_right: 0.0,
-                                },
-                                ..Default::default()
-                            },
-                            text_color: palette.text,
-                            ..Default::default()
-                        }
-                    })
-                    .on_press(Message::ShowMessageHistory(true))
-                )
-                .center_y(Length::Fill)
-                .into()
-            }
+            self.message_history()
         )
         .into()
     }
