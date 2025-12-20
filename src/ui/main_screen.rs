@@ -222,10 +222,13 @@ impl MainScreen {
             .push(
                 button(text(if self.show_message_history.value() { ">" } else { "<" }).center())
                 .height(80)
-                .style(|theme: &iced::Theme, _status| {
+                .style(|theme: &iced::Theme, button_status| {
                     let palette = theme.extended_palette();
                     button::Style {
-                        background: Some(palette.background.weaker.color.into()),
+                        background: match button_status {
+                            button::Status::Active => Some(palette.background.weaker.color.into()),
+                            _ => Some(palette.background.neutral.color.into())
+                        },
                         border: Border {
                             radius: Radius {
                                 top_left: 10.0,

@@ -122,6 +122,7 @@ impl SendMessageInfo {
                     self.content.graphemes(true).take(23).collect::<String>()
                 )
                 .center()
+                .wrapping(text::Wrapping::None)
                 .width(Length::Fill)
             )
             .push(
@@ -193,9 +194,9 @@ impl SendMessageInfo {
         .style(move |theme: &Theme| {
             let palette = theme.extended_palette();
             let background = match status {
-                SendStatus::Deleted | SendStatus::Failed => palette.danger.weak.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
+                SendStatus::Deleted | SendStatus::Failed => palette.danger.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
                 SendStatus::Sending => palette.background.base.color,
-                SendStatus::Sent => palette.success.weak.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
+                SendStatus::Sent => palette.success.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
                 SendStatus::Pending => palette.background.base.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
             };
             container::Style {
