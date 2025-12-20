@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, VecDeque}, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
 
-use iced::{Alignment, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
 use crate::{signal::SignalMessage, ui::{message_history::SendMessageInfo}};
@@ -38,7 +38,7 @@ impl From<Message> for MainMessage {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct MainScreen {
     register_url: Option<qr_code::Data>,
     link_state: LinkState,
@@ -46,9 +46,10 @@ pub(super) struct MainScreen {
     message_content: text_editor::Content,
     pub groups: HashMap<[u8; 32], Group>,
     pub message_history: VecDeque<Arc<SendMessageInfo>>,
-    show_message_history: bool,
+    pub show_message_history: Animation<bool>,
     history_limit: u32,
     edit: Option<Arc<SendMessageInfo>>,
+    now: Instant,
 }
 
 impl MainScreen {
@@ -57,7 +58,15 @@ impl MainScreen {
             autosend,
             groups,
             history_limit,
-            ..Default::default()
+            register_url: None,
+            link_state: Default::default(),
+            message_content: Default::default(),
+            message_history: Default::default(),
+            show_message_history: Animation::new(false)
+                .slow()
+                .easing(iced::animation::Easing::EaseInOut),
+            edit: Default::default(),
+            now: Instant::now(),
         }
     }
 
@@ -69,7 +78,9 @@ impl MainScreen {
         &self.groups
     }
 
-    pub fn update(&mut self, message: Message) -> Task<MainMessage> {
+    pub fn update(&mut self, message: Message, now: Instant) -> Task<MainMessage> {
+        self.now = now;
+
         match message {
             Message::SetRegisterUrl(url) => {
                 let url = url.as_ref();
@@ -141,7 +152,7 @@ impl MainScreen {
                 return Task::done(MainMessage::SetScreen(super::Screen::Settings));
             },
             Message::ShowMessageHistory(state) => {
-                self.show_message_history = state;
+                self.show_message_history.go_mut(state, self.now);
             },
             Message::DeleteMessage(idx) => {
                 return Task::done(MainMessage::DeleteMessage(Arc::clone(&self.message_history[idx])))
@@ -205,71 +216,17 @@ impl MainScreen {
     }
 
     fn message_history(&self) -> Element<'_, Message> {
-        if self.show_message_history {
-            Element::new(
-                Row::new()
-                .width(Length::FillPortion(3))
-                .align_y(Alignment::Center)
-                .push(
-                    button(text(">").center())
-                    .height(80)
-                    .style(|theme: &iced::Theme, _status| {
-                        let palette = theme.extended_palette();
-                        button::Style {
-                            background: Some(palette.background.weaker.color.into()),
-                            border: Border {
-                                radius: Radius {
-                                    top_left: 10.0,
-                                    bottom_left: 10.0,
-                                    top_right: 0.0,
-                                    bottom_right: 0.0,
-                                },
-                                ..Default::default()
-                            },
-                            text_color: palette.background.weaker.text,
-                            ..Default::default()
-                        }
-                    })
-                    .on_press(Message::ShowMessageHistory(false))   
-                )
-                .push(
-                    scrollable(
-                        self.message_history.iter().enumerate().fold(
-                            Column::new()
-                            .padding(10)
-                            .spacing(3)
-                            .width(Length::Fill)
-                            .height(Length::Fill),
-                            |col, (idx, message_info)| {
-                                col.push(
-                                    message_info.view(idx)
-                                )
-                            }
-                        )
-                    )
-                    .style(|theme, status| scrollable::Style {
-                        container: container::Style {
-                            background: Some(theme.extended_palette().background.weaker.color.into()),
-                            ..Default::default()
-                        },
-                        ..scrollable::default(theme, status)
-                    })
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                )
-            )
-        }
-        else {
-            container(
-                button(text("<").center())
+        Element::new(
+            Row::new()
+            .align_y(Alignment::Center)
+            .push(
+                button(text(if self.show_message_history.value() { ">" } else { "<" }).center())
                 .height(80)
                 .style(|theme: &iced::Theme, _status| {
                     let palette = theme.extended_palette();
                     button::Style {
-                        background: Some(palette.background.weakest.color.into()),
+                        background: Some(palette.background.weaker.color.into()),
                         border: Border {
-                            width: 0.0,
-                            color: palette.background.weakest.text,
                             radius: Radius {
                                 top_left: 10.0,
                                 bottom_left: 10.0,
@@ -278,15 +235,40 @@ impl MainScreen {
                             },
                             ..Default::default()
                         },
-                        text_color: palette.background.weakest.text,
+                        text_color: palette.background.weaker.text,
                         ..Default::default()
                     }
                 })
-                .on_press(Message::ShowMessageHistory(true))
+                .on_press(Message::ShowMessageHistory(!self.show_message_history.value()))   
             )
-            .center_y(Length::Fill)
-            .into()
-        }
+            .push(
+                scrollable(
+                    self.message_history.iter().enumerate().fold(
+                        Column::new()
+                        .padding(10)
+                        .spacing(3)
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                        |col, (idx, message_info)| {
+                            col.push(
+                                message_info.view(idx)
+                            )
+                        }
+                    )
+                )
+                .style(|theme, status| scrollable::Style {
+                    container: container::Style {
+                        background: Some(theme.extended_palette().background.weaker.color.into()),
+                        ..Default::default()
+                    },
+                    ..scrollable::default(theme, status)
+                })
+                .width(self.show_message_history.interpolate(0., 250., self.now))
+                .height(Length::Fill)
+            )
+            .height(Length::Fill)
+            .width(Length::Shrink)
+        )
     }
 
     pub fn view(&self) -> Element<'_, Message> {
