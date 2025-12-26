@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{net::TcpStream, sync::Arc, time::{Duration, SystemTime}};
 
 use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
 use log::{info, warn};
@@ -102,8 +102,19 @@ pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> 
 }
 
 async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
-    let mut ch = msg_send_channel.clone();
-    tokio::spawn(async move { ch.send(ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Linking).into()).await });
+    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Linking));
+    loop {
+        match TcpStream::connect("209.85.233.101:80") {
+            Ok(_) => {
+                break;
+            },
+            Err(_) => {
+                send_ui_message(msg_send_channel.clone(), ui::Message::Notification("Немає підключення до інтернету".to_owned()));
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+        }
+    }
+
     let store = get_store().await?;
     info!("Registering from store");
     match Manager::load_registered(store).await {
