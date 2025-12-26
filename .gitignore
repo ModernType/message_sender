@@ -2,5 +2,5 @@
 data.ron
 sender.log
 signal_data.db
-whatsapp_data.db
+whatsapp_data*
 test*.json
