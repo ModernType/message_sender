@@ -1,24 +1,26 @@
-use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
+use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
 
-use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, checkbox, container, qr_code, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{signal::SignalMessage, ui::{message_history::SendMessageInfo}};
+use crate::{messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
 
-type Key = [u8; 32];
 
 #[derive(Debug, Clone)]
 pub enum Message {
     SetRegisterUrl(url::Url),
-    SetLinkState(LinkState),
+    SetSignalState(LinkState),
+    SetWhatsappUrl(String),
+    SetWhatsappState(LinkState),
     SetAutoSend(bool),
     TextEdit(text_editor::Action),
     SendMessage(String),
     SendMessagePressed,
     LinkBegin,
+    WhatsappLink,
     ToggleGroup(Key, bool),
     SetGroups(Vec<(Key, String)>),
     UpdateGroups,
@@ -30,6 +32,8 @@ pub enum Message {
     CancelEdit,
     ConfirmEdit,
     SetHistoryLimit(u32),
+    ShowSignalGroups(bool),
+    ShowWhatsappGroups(bool),
 }
 
 impl From<Message> for MainMessage {
@@ -41,25 +45,31 @@ impl From<Message> for MainMessage {
 #[derive(Debug)]
 pub(super) struct MainScreen {
     register_url: Option<qr_code::Data>,
-    link_state: LinkState,
+    whatsapp_url: Option<qr_code::Data>,
+    pub signal_state: LinkState,
+    pub whatsapp_state: LinkState,
     autosend: bool,
     message_content: text_editor::Content,
-    pub groups: HashMap<[u8; 32], Group>,
+    pub groups: HashMap<Key, Group>,
     pub message_history: VecDeque<Arc<SendMessageInfo>>,
     pub show_message_history: Animation<bool>,
     history_limit: u32,
     edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
+    show_signal_groups: bool,
+    show_whatsapp_groups: bool,
 }
 
 impl MainScreen {
-    pub fn new(autosend: bool, groups: HashMap<[u8; 32], Group>, history_limit: u32) -> Self {
+    pub fn new(autosend: bool, groups: HashMap<Key, Group>, history_limit: u32) -> Self {
         Self {
             autosend,
             groups,
             history_limit,
             register_url: None,
-            link_state: Default::default(),
+            whatsapp_url: None,
+            signal_state: Default::default(),
+            whatsapp_state: Default::default(),
             message_content: Default::default(),
             message_history: Default::default(),
             show_message_history: Animation::new(false)
@@ -67,6 +77,8 @@ impl MainScreen {
                 .easing(iced::animation::Easing::EaseInOut),
             edit: Default::default(),
             now: Instant::now(),
+            show_signal_groups: true,
+            show_whatsapp_groups: true,
         }
     }
 
@@ -74,7 +86,7 @@ impl MainScreen {
         self.autosend
     }
 
-    pub fn groups(&self) -> &HashMap<[u8; 32], Group> {
+    pub fn groups(&self) -> &HashMap<Key, Group> {
         &self.groups
     }
 
@@ -86,11 +98,24 @@ impl MainScreen {
                 let url = url.as_ref();
                 self.register_url = Some(
                     qr_code::Data::new(url).unwrap()
-                )
+                );
+                self.signal_state = LinkState::Linking;
             },
-            Message::SetLinkState(state) => {
-                self.link_state = state;
-                if state == LinkState::Linked {
+            Message::SetWhatsappUrl(data) => {
+                self.whatsapp_url = Some(
+                    qr_code::Data::new(data.as_bytes()).unwrap()
+                );
+                self.whatsapp_state = LinkState::Linking;
+            },
+            Message::SetWhatsappState(state) => {
+                self.whatsapp_state = state;
+                if state != LinkState::Linking {
+                    self.whatsapp_url = None;
+                }
+            }
+            Message::SetSignalState(state) => {
+                self.signal_state = state;
+                if state != LinkState::Linking {
                     self.register_url = None;
                 }
             },
@@ -104,6 +129,7 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
+                // FIXME: Fix send of empty messages
                 let text = self.message_content.text();
                 self.message_content = text_editor::Content::new();
                 return Task::done(Message::SendMessage(text).into())
@@ -113,7 +139,7 @@ impl MainScreen {
                 
                 for (key, group) in self.groups.iter() {
                     if group.active {
-                        message.push(*key, group.title.clone());
+                        message.push(key.clone(), group.title.clone());
                     }
                 }
                 let message = Arc::new(message);
@@ -132,6 +158,10 @@ impl MainScreen {
             },
             Message::LinkBegin => {
                 return Task::done(SignalMessage::LinkBegin.into())
+            },
+            Message::WhatsappLink => {
+                self.whatsapp_state = LinkState::Linking;
+                return Task::perform(whatsapp::start_whatsapp_task(), |_| MainMessage::None);
             },
             Message::ToggleGroup(key, active) => {
                 self.groups.get_mut(&key).unwrap().active = active;
@@ -158,6 +188,7 @@ impl MainScreen {
                 return Task::done(MainMessage::DeleteMessage(Arc::clone(&self.message_history[idx])))
             },
             Message::EditMessage(idx) => {
+                // FIXME: Edit another message while editing
                 let message = self.message_history.remove(idx).unwrap();
                 let content = text_editor::Content::with_text(&message.content);
                 self.message_content = content;
@@ -175,7 +206,15 @@ impl MainScreen {
             Message::ConfirmEdit => {
                 let mut arc_message = self.edit.take().unwrap();
                 let message = Arc::get_mut(&mut arc_message).unwrap();
-                let timestamps = message.groups.iter().map(|group| group.timestamp.swap(0, std::sync::atomic::Ordering::Relaxed)).collect();
+                
+                let timestamps = message.groups_signal.iter().map(|group| group.timestamp.swap(0, std::sync::atomic::Ordering::Relaxed)).collect();
+                let whatsapp_ids = message.groups_whatsapp.iter_mut()
+                .map(|msg| {
+                    let mut id = msg.sent_id.lock().unwrap();
+                    std::mem::take(&mut *id)
+                })
+                .collect::<Vec<_>>();
+
                 let new_message = self.message_content.text();
                 self.message_content = text_editor::Content::new();
 
@@ -187,7 +226,13 @@ impl MainScreen {
                 }
                 self.message_history.push_front(arc_message.clone());
 
-                return Task::done(MainMessage::EditMessage(arc_message, timestamps));
+                return Task::done(MainMessage::EditMessage(arc_message, timestamps, whatsapp_ids));
+            },
+            Message::ShowSignalGroups(show) => {
+                self.show_signal_groups = show;
+            },
+            Message::ShowWhatsappGroups(show) => {
+                self.show_whatsapp_groups = show;
             },
         }
 
@@ -196,19 +241,68 @@ impl MainScreen {
 
     fn group_list(&self) -> Element<'_, Message> {
         scrollable(
-            {
-                let mut v = self.groups.iter().collect::<Vec<_>>();
-                v.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                v.into_iter().fold(Column::new()
-                .spacing(5),
-                |col, (key, group)| {
-                    col.push(
-                        checkbox(group.active)
-                        .label(&group.title)
-                        .on_toggle(move |state| Message::ToggleGroup(key.clone(), state))
+            Column::new()
+            .spacing(3)
+            .push(
+                mouse_area(
+                    Row::new()
+                    .width(Length::Fill)
+                    .push(text("Signal").width(Length::Fill))
+                    .push(
+                        svg(svg::Handle::from_memory(
+                            if self.show_signal_groups { include_bytes!("icons/drop_up.svg") }
+                            else { include_bytes!("icons/drop_down.svg") }
+                        ))
+                        .width(Length::Shrink)
                     )
+                )
+                .on_press(Message::ShowSignalGroups(!self.show_signal_groups))
+                .interaction(Interaction::Pointer)
+            )
+            .push_maybe(self.show_signal_groups.then(|| {
+                let mut groups = self.groups.iter()
+                .filter_map(|(key, group)| match key {
+                    Key::Signal(key) => Some((key, group)),
+                    _ => None
                 })
-            }
+                .collect::<Vec<_>>();
+                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
+                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
+                    checkbox(group.active)
+                    .label(&group.title)
+                    .on_toggle(move |state| Message::ToggleGroup(Key::Signal(key.clone()), state))
+                ))
+            }))
+            .push(
+                    mouse_area(
+                        Row::new()
+                        .width(Length::Fill)
+                        .push(text("Whatsapp").width(Length::Fill))
+                        .push(
+                            svg(svg::Handle::from_memory(
+                                if self.show_whatsapp_groups { include_bytes!("icons/drop_up.svg") }
+                                else { include_bytes!("icons/drop_down.svg") }
+                            ))
+                            .width(Length::Shrink)
+                        )
+                    )
+                    .on_press(Message::ShowWhatsappGroups(!self.show_whatsapp_groups))
+                    .interaction(Interaction::Pointer)
+            )
+            .push_maybe(self.show_whatsapp_groups.then(|| {
+                let mut groups = self.groups.iter()
+                .filter_map(|(key, group)| match key {
+                    Key::Whatsapp(key) => Some((key, group)),
+                    _ => None
+                })
+                .collect::<Vec<_>>();
+                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
+                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
+                    checkbox(group.active)
+                    .label(&group.title)
+                    .on_toggle(move |state| Message::ToggleGroup(Key::Whatsapp(key.clone()), state))
+                ))
+            }))
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -288,33 +382,69 @@ impl MainScreen {
                 .size(26)
                 .center()
                 .width(Length::Fill)
-                .color(
-                    match self.link_state {
-                        LinkState::Linked => Color::from_rgb(0.0, 0.8, 0.0),
-                        LinkState::Unlinked => Color::from_rgb(0.8, 0.0, 0.0),
-                        LinkState::Linking => Color::from_rgb(0.8, 0.8, 0.0)
-                    }
-                )
             )
             .push(
                 Row::new()
+                .height(70)
+                .push(
+                    container(
+                        button(
+                            svg(svg::Handle::from_memory(include_bytes!("icons/settings.svg")))
+                            .width(Length::Fill)
+                            .style(|theme: &iced::Theme, _status| {
+                                svg::Style { color: Some(theme.palette().text) }
+                            })
+                        )
+                        .style(button::text)
+                        .on_press(Message::Settings)
+                        .width(Length::Fill)
+                    )
+                    .center(Length::Fill)
+                )
                 .push(
                     button(
-                        svg(svg::Handle::from_memory(include_bytes!("icons/settings.svg")))
+                        svg(svg::Handle::from_memory(include_bytes!("icons/signal.svg")))
                         .style(|theme: &iced::Theme, _status| {
-                            svg::Style { color: Some(theme.palette().text) }
+                            let palette = theme.extended_palette();
+                            svg::Style { color: match self.signal_state {
+                                LinkState::Linked => None,
+                                LinkState::Linking => Some(Color { r: 0.5, g: 0.5, b: 0., a: 1. }),
+                                LinkState::Unlinked => Some(palette.background.strong.color),
+                            } }
                         })
                     )
                     .style(button::text)
-                    .on_press(Message::Settings)
-                    .width(Length::Shrink)
+                    .on_press_maybe(match self.signal_state {
+                        LinkState::Unlinked => Some(Message::LinkBegin),
+                        // LinkState::Linking => Some(Message::SetSignalState(LinkState::Unlinked)),
+                        _ => None
+                    })
                 )
                 .push(
-                    match self.link_state {
-                        LinkState::Unlinked => button(text("Приєднати пристрій").width(Length::Fill).center()).on_press(Message::LinkBegin),
-                        LinkState::Linking => button(text("Приєднати пристрій").width(Length::Fill).center()),
-                        LinkState::Linked => button(text("Оновити групи").width(Length::Fill).center()).on_press(Message::UpdateGroups),
-                    }
+                    button(
+                        svg(svg::Handle::from_memory(include_bytes!("icons/whatsapp.svg")))
+                        .style(|theme: &iced::Theme, _status| {
+                            let palette = theme.extended_palette();
+                            svg::Style { color: match self.whatsapp_state {
+                                LinkState::Linked => None,
+                                LinkState::Linking => Some(Color { r: 0.5, g: 0.5, b: 0., a: 1. }),
+                                LinkState::Unlinked => Some(palette.background.strong.color),
+                            } }
+                        })
+                    )
+                    .style(button::text)
+                    .on_press_maybe(match self.whatsapp_state {
+                        LinkState::Unlinked => Some(Message::WhatsappLink),
+                        // LinkState::Linking => Some(Message::SetWhatsappState(LinkState::Unlinked)),
+                        _ => None
+                    })
+                )
+            )
+            .push_maybe(
+                (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked).then(||
+                    button(
+                        text("Оновити групи").width(Length::Fill).center()).on_press(Message::UpdateGroups
+                    )
                     .style(
                         |theme: &iced::Theme, status| {
                             let palette = theme.extended_palette();
@@ -334,6 +464,11 @@ impl MainScreen {
             )
             .push_maybe(
                 self.register_url.as_ref().map(
+                    |data| qr_code(data).style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
+                )
+            )
+            .push_maybe(
+                self.whatsapp_url.as_ref().map(
                     |data| qr_code(data).style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
                 )
             )
@@ -390,7 +525,7 @@ impl MainScreen {
                             })
                         )
                         .on_press_maybe(
-                            (self.link_state == LinkState::Linked).then_some(Message::SendMessagePressed)
+                            (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked).then_some(Message::SendMessagePressed)
                         )
                     )
                 }

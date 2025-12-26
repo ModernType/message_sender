@@ -1,5 +1,5 @@
 use std::{
-    borrow::Cow, collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
+    borrow::Cow, collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::{Arc, Mutex}, time::{Duration, Instant}
 };
 use derive_more::Display;
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
@@ -7,9 +7,9 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server};
+use crate::{message::OperatorMessage, message_server, messangers::{Key, whatsapp}, ui::main_screen::LinkState};
 
-use crate::{signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
+use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
 pub mod main_screen;
 pub mod settings_screen;
@@ -24,16 +24,17 @@ pub enum Screen {
     Settings,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Message {
     MainScrMessage(main_screen::Message),
     SettingsScrMessage(settings_screen::Message),
     SignalMessage(SignalMessage),
     SetManager(Manager<SqliteStore, Registered>),
+    SetWhatsappClient(Option<Arc<whatsapp_rust::Client>>),
     SetupSignalWorker(UnboundedSender<Message>),
     SendMessage(Arc<SendMessageInfo>),
     DeleteMessage(Arc<SendMessageInfo>),
-    EditMessage(Arc<SendMessageInfo>, Vec<u64>),
+    EditMessage(Arc<SendMessageInfo>, Vec<u64>, Vec<String>),
     SetScreen(Screen),
     AcceptMessage(String),
     OnClose,
@@ -44,16 +45,22 @@ pub enum Message {
     None,
 }
 
+impl Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ui::Message").finish_non_exhaustive()
+    }
+}
+
 impl From<SignalMessage> for Message {
     fn from(value: SignalMessage) -> Self {
         Self::SignalMessage(value)
     }
 }
 
-#[derive(Debug)]
 pub struct App {
     cur_screen: Screen,
     manager: Option<Manager<SqliteStore, Registered>>,
+    whatsapp_client: Option<Arc<whatsapp_rust::Client>>,
     main_scr: MainScreen,
     sett_scr: SettingsScreen,
     signal_task_send: Option<UnboundedSender<SignalMessage>>,
@@ -61,6 +68,8 @@ pub struct App {
     now: Instant,
     notification: Notification,
     theme: iced::Theme,
+    signal_logged: bool,
+    whatsapp_logged: bool,
 }
 
 impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
@@ -78,6 +87,7 @@ impl App {
         let groups = data.cached_groups.into_owned();
         Self {
             manager: None,
+            whatsapp_client: None,
             cur_screen: Screen::Main,
             main_scr: MainScreen::new(data.autosend, groups, data.history_len),
             sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.send_mode, data.history_len),
@@ -91,7 +101,9 @@ impl App {
                     dark_light::Mode::Dark => iced::Theme::Dracula,
                     dark_light::Mode::Unspecified => iced::Theme::CatppuccinLatte,
                 }
-            }
+            },
+            signal_logged: data.signal_logged,
+            whatsapp_logged: data.whatsapp_logged,
         }
     }
 
@@ -105,9 +117,16 @@ impl App {
             send_mode: self.sett_scr.send_mode,
             history_len: self.sett_scr.history_len,
             recieve_address: self.sett_scr.recieve_address,
+            signal_logged: self.signal_logged,
+            whatsapp_logged: self.whatsapp_logged,
             ..Default::default()
         };
         data.save()
+    }
+
+    #[inline]
+    fn whatsapp_registered(&self) -> bool {
+        self.main_scr.whatsapp_state == LinkState::Linked
     }
 
     pub fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
@@ -134,10 +153,26 @@ impl App {
             }
             Message::SetManager(mng) => {
                 self.manager = Some(mng.clone());
+                self.signal_logged = true;
                 Task::batch([
-                    Task::done(main_screen::Message::SetLinkState(main_screen::LinkState::Linked).into()),
+                    Task::done(main_screen::Message::SetSignalState(main_screen::LinkState::Linked).into()),
                     Task::done(SignalMessage::Sync(mng).into())   
                 ])
+            },
+            Message::SetWhatsappClient(maybe_client) => {
+                match maybe_client {
+                    Some(client) => {
+                        self.whatsapp_client = Some(client);
+                        self.whatsapp_logged = true;
+                        Task::done(main_screen::Message::SetWhatsappState(LinkState::Linked).into())
+                    },
+                    None if !self.whatsapp_registered() => {
+                        Task::done(main_screen::Message::SetWhatsappState(LinkState::Unlinked).into())
+                    },
+                    _ => {
+                        Task::none()
+                    }
+                }
             },
             Message::Synced => {
                 Task::done(main_screen::Message::UpdateGroups.into())
@@ -146,29 +181,70 @@ impl App {
                 let (task_tx, task_rx) = futures::channel::mpsc::unbounded();
                 SignalWorker::spawn_new(task_rx, tx.clone());
                 self.signal_task_send = Some(task_tx);
+                whatsapp::UI_MESSAGE_SENDER.set(tx.clone()).unwrap();
 
                 Task::batch([
-                    Task::done(SignalMessage::LinkBegin.into()),
+                    if self.signal_logged { Task::done(SignalMessage::LinkBegin.into()) } else { Task::none() },
+                    if self.whatsapp_logged { Task::perform(whatsapp::start_whatsapp_task(), |_| Message::None) } else { Task::none() },
                     Task::perform(message_server::start_server(self.sett_scr.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
                 ])
             },
             Message::UpdateGroupList => {
+                let mut task_list = Vec::with_capacity(2);
                 if let Some(manager) = self.manager.as_ref() {
-                    Task::perform(crate::signal::get_groups(manager.clone()), |v| v.map(main_screen::Message::SetGroups).into())
+                    task_list.push(
+                        Task::perform(crate::messangers::signal::get_groups(manager.clone()), |v| v.map(main_screen::Message::SetGroups).into())
+                    );
                 }
-                else {
-                    Task::none()
+                if let Some(client) = self.whatsapp_client.as_ref() {
+                    task_list.push(
+                        Task::perform(whatsapp::get_groups(client.clone()), |v| v.map(main_screen::Message::SetGroups).into())
+                    );
                 }
+                Task::batch(task_list)
             },
             Message::SendMessage(message) => {
-                Task::done(SignalMessage::SendMessage(self.manager.as_ref().unwrap().clone(), message, self.sett_scr.markdown, self.sett_scr.parallel).into())
+                let mut task_list = Vec::with_capacity(2);
+                if let Some(manager) = self.manager.as_ref()  {
+                    task_list.push(
+                        Task::done(SignalMessage::SendMessage(manager.clone(), message.clone(), self.sett_scr.markdown, self.sett_scr.parallel).into())
+                    );
+                }
+                if let Some(client) = self.whatsapp_client.as_ref() {
+                    task_list.push(
+                        Task::perform(whatsapp::send_message(client.clone(), message), |_| Message::None)
+                    );
+                }
+                Task::batch(task_list)
             },
             Message::DeleteMessage(message) => {
                 message.set_status(message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
-                Task::done(SignalMessage::DeleteMessage(self.manager.as_ref().unwrap().clone(), message).into())
+                let mut task_list = Vec::with_capacity(2);
+                if let Some(manager) = self.manager.as_ref()  {
+                    task_list.push(
+                        Task::done(SignalMessage::DeleteMessage(manager.clone(), message.clone()).into())
+                    );
+                }
+                if let Some(client) = self.whatsapp_client.as_ref() {
+                    task_list.push(
+                        Task::perform(whatsapp::delete_message(client.clone(), message), |_| Message::None)
+                    );
+                }
+                Task::batch(task_list)
             },
-            Message::EditMessage(message, timestamps) => {
-                Task::done(SignalMessage::EditMessage(self.manager.as_ref().unwrap().clone(), message, timestamps, self.sett_scr.markdown).into())
+            Message::EditMessage(message, timestamps, whatsapp_ids) => {
+                let mut task_list = Vec::with_capacity(2);
+                if let Some(manager) = self.manager.as_ref()  {
+                    task_list.push(
+                        Task::done(SignalMessage::EditMessage(manager.clone(), message.clone(), timestamps, self.sett_scr.markdown).into())
+                    );
+                }
+                if let Some(client) = self.whatsapp_client.as_ref() {
+                    task_list.push(
+                        Task::perform(whatsapp::edit_message(client.clone(), message, whatsapp_ids), |_| Message::None)
+                    );
+                }
+                Task::batch(task_list)
             },
             Message::AcceptMessage(message) => {
                 let autosend = self.main_scr.autosend();
@@ -276,7 +352,7 @@ impl App {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppData<'a> {
-    pub cached_groups: Cow<'a, HashMap<[u8; 32], main_screen::Group>>,
+    pub cached_groups: Cow<'a, HashMap<Key, main_screen::Group>>,
     pub recieve_address: SocketAddrV4,
     pub autosend: bool,
     pub send_mode: SendMode,
@@ -284,7 +360,9 @@ pub struct AppData<'a> {
     pub send_timeout: u64,
     pub markdown: bool,
     pub parallel: bool,
-    pub history_len: u32
+    pub history_len: u32,
+    pub signal_logged: bool,
+    pub whatsapp_logged: bool,
 }
 
 impl Default for AppData<'_> {
@@ -299,6 +377,8 @@ impl Default for AppData<'_> {
             markdown: true,
             parallel: false,
             history_len: 20,
+            signal_logged: false,
+            whatsapp_logged: false,
         }
     }
 }

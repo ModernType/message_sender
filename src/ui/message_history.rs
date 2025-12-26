@@ -1,13 +1,17 @@
-use std::sync::{Arc, atomic::{AtomicU8, AtomicU64, Ordering}};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}};
 
 use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
 use unicode_segmentation::UnicodeSegmentation;
+use wacore_binary::jid::Jid;
+
+use crate::messangers::Key;
 
 #[derive(Debug)]
 pub struct SendMessageInfo {
     pub content: String,
     pub status: AtomicU8,
-    pub groups: Vec<GroupInfo>,
+    pub groups_signal: Vec<GroupInfoSignal>,
+    pub groups_whatsapp: Vec<GroupInfoWhatsapp>,
 }
 
 #[repr(u8)]
@@ -34,13 +38,13 @@ impl From<u8> for SendStatus {
 }
 
 #[derive(Debug)]
-pub struct GroupInfo {
+pub struct GroupInfoSignal {
     pub key: [u8; 32],
     pub title: String,
     pub(super) timestamp: AtomicU64,
 }
 
-impl Clone for GroupInfo {
+impl Clone for GroupInfoSignal {
     fn clone(&self) -> Self {
         Self {
             key: self.key,
@@ -50,7 +54,7 @@ impl Clone for GroupInfo {
     }
 }
 
-impl GroupInfo {
+impl GroupInfoSignal {
     pub fn new(key: [u8; 32], title: String) -> Self {
         Self { key, title, timestamp: AtomicU64::new(0) }
     }
@@ -74,21 +78,86 @@ impl GroupInfo {
     }
 }
 
+#[derive(Debug)]
+pub struct GroupInfoWhatsapp {
+    pub key: Jid,
+    pub title: String,
+    sent: AtomicBool,
+    pub(super) sent_id: Mutex<String>,
+}
+
+impl Clone for GroupInfoWhatsapp {
+    fn clone(&self) -> Self {
+        Self {
+            key: self.key.clone(),
+            title: self.title.clone(),
+            sent: AtomicBool::new(self.sent.load(Ordering::Relaxed)),
+            sent_id: Mutex::new(self.sent_id.lock().unwrap().clone()),
+        }
+    }
+}
+
+impl GroupInfoWhatsapp {
+    pub fn new(key: Jid, title: String) -> Self {
+        Self {
+            key,
+            title,
+            sent: AtomicBool::new(false),
+            sent_id: Mutex::new(String::new()),
+        }
+    }
+
+    pub fn sent(&self, ordering: Ordering) -> bool {
+        self.sent.load(ordering)
+    }
+
+    pub fn delete(&self, ordering: Ordering) {
+        self.sent.store(false, Ordering::Relaxed);
+    }
+
+    pub fn set_id(&self, id: String) {
+        let mut lock = self.sent_id.lock().unwrap();
+        *lock = id;
+        self.sent.store(true, Ordering::Relaxed);
+    }
+
+    pub fn get_message_id(&self) -> Option<String> {
+        let s = self.sent_id.lock().unwrap();
+        if !s.is_empty() {
+            Some(s.clone())
+        }
+        else {
+            None
+        }
+    }
+}
+
 impl SendMessageInfo {
     pub fn new(content: String) -> Self {
         Self {
             content,
             status: AtomicU8::new(SendStatus::Pending as u8),
-            groups: Vec::new(),
+            groups_signal: Vec::new(),
+            groups_whatsapp: Vec::new(),
         }
     }
 
-    pub fn push(&mut self, group_key: [u8; 32], title: String) {
-        self.groups.push(GroupInfo::new(group_key, title));
+    pub fn push(&mut self, group_key: Key, title: String) {
+        match group_key {
+            Key::Signal(key) => self.groups_signal.push(GroupInfoSignal::new(key, title)),
+            Key::Whatsapp(key) => self.groups_whatsapp.push(GroupInfoWhatsapp::new(key, title)),
+        }
     }
 
     pub fn sent_count(&self) -> usize {
-        self.groups.iter().filter(|g| g.sent(Ordering::Relaxed)).count()
+        self.groups_signal.iter()
+        .map(|g| g.sent(Ordering::Relaxed))
+        .chain(
+            self.groups_whatsapp.iter()
+            .map(|g| g.sent(Ordering::Relaxed))
+        )
+        .filter(|v| *v)
+        .count()
     }
 
     // pub fn sent(&self) -> bool {
@@ -100,7 +169,12 @@ impl SendMessageInfo {
     // }
 
     pub fn set_status(&self, status: SendStatus, ordering: Ordering) {
+        // TODO: Add check with sent_count to determine true `Sent` and `Deleted` state
         self.status.store(status as u8, ordering);
+    }
+
+    pub fn len(&self) -> usize {
+        self.groups_signal.len() + self.groups_whatsapp.len()
     }
 
     pub fn view<'a>(self: &'a Arc<Self>, idx: usize) -> Element<'a, super::main_screen::Message, Theme> {
@@ -134,13 +208,13 @@ impl SendMessageInfo {
                         .center()
                         .width(Length::Fill)
                     ),
-                    SendStatus::Deleted => Element::from(
+                    SendStatus::Deleted if sent_count == 0 => Element::from(
                         text("Видалено")
                         .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().danger.base.color) })
                         .center()
                         .width(Length::Fill)
                     ),
-                    SendStatus::Sent => Element::from(
+                    SendStatus::Sent if sent_count == self.len() => Element::from(
                         text("Відправлено")
                         .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) })
                         .center()
@@ -149,13 +223,13 @@ impl SendMessageInfo {
                     _ => Element::from(
                         Column::new()
                         .push(
-                            text(format!("{}/{}", sent_count, self.groups.len()))
+                            text(format!("{}/{}", sent_count, self.groups_signal.len() + self.groups_whatsapp.len()))
                             .color_maybe(status_color)
                             .center()
                             .width(Length::Fill)
                         )
                         .push(
-                            progress_bar(0.0 ..= self.groups.len() as f32, sent_count as f32)
+                            progress_bar(0.0 ..= (self.groups_signal.len() + self.groups_whatsapp.len()) as f32, sent_count as f32)
                             .length(Length::Fill)
                             .girth(5)
                             .style(move |theme: &Theme| {

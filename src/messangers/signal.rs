@@ -1,13 +1,12 @@
 use std::{sync::Arc, time::SystemTime};
 
 use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
-use iced::message;
 use log::{info, warn};
-use presage::{libsignal_service::configuration::SignalServers, manager::{self, Registered}, proto::{DataMessage, EditMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
+use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, EditMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::LocalSet;
 
-use crate::ui::{self, message_history::{GroupInfo, SendMessageInfo, SendStatus}};
+use crate::{messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}}};
 
 type Manager = presage::Manager<SqliteStore, Registered>;
 
@@ -58,7 +57,7 @@ impl SignalWorker {
                 SignalMessage::LinkBegin => {
                     match link(ui_message_sender.clone()).await {
                         Ok(mng) => send_ui_message(ui_message_sender.clone(), ui::Message::SetManager(mng)),
-                        Err(_e) => send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetLinkState(ui::main_screen::LinkState::Unlinked)),
+                        Err(_e) => send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Unlinked)),
                     }
                 },
                 SignalMessage::Sync(mng) => {
@@ -91,12 +90,12 @@ async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     Ok(store)
 }
 
-pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<([u8;32], String)>> {
+pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> {
     Ok(
         manager.store().groups().await?.into_iter()
         .flatten()
         .map(|(key, group)| {
-            (key, group.title)
+            (Key::from(key), group.title)
         })
         .collect()
     )
@@ -104,7 +103,7 @@ pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<([u8;32], String
 
 async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
     let mut ch = msg_send_channel.clone();
-    tokio::spawn(async move { ch.send(ui::main_screen::Message::SetLinkState(ui::main_screen::LinkState::Linking).into()).await });
+    tokio::spawn(async move { ch.send(ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Linking).into()).await });
     let store = get_store().await?;
     info!("Registering from store");
     match Manager::load_registered(store).await {
@@ -184,7 +183,7 @@ async fn send_message(
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
     if !parallel {
-        for group in message.groups.iter() {
+        for group in message.groups_signal.iter() {
             loop {
                 match send_message_inner(
                     manager.clone(),
@@ -207,7 +206,7 @@ async fn send_message(
     }
     else {
         futures::future::join_all(
-            message.groups.iter()
+            message.groups_signal.iter()
             .map(|group| async {
                 loop {
                     match send_message_inner(
@@ -236,7 +235,7 @@ async fn send_message(
 
 async fn send_message_inner(
     mut manager: Manager,
-    group: &GroupInfo,
+    group: &GroupInfoSignal,
     message: &str,
     markdown: bool,
 ) -> anyhow::Result<()> {
@@ -284,7 +283,7 @@ async fn delete_message(
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
     
-    for group in message.groups.iter() {
+    for group in message.groups_signal.iter() {
         let target_timestamp = group.timestamp(std::sync::atomic::Ordering::Relaxed).unwrap();
         let cur_timestamp = std::time::SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -337,7 +336,7 @@ async fn edit_message(
 ) -> anyhow::Result<()> {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-    for (group, timestamp) in message.groups.iter().zip(timestamps) {
+    for (group, timestamp) in message.groups_signal.iter().zip(timestamps) {
         let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
