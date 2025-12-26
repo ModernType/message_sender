@@ -4,11 +4,12 @@ use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, contain
 use unicode_segmentation::UnicodeSegmentation;
 use wacore_binary::jid::Jid;
 
-use crate::messangers::Key;
+use crate::{message::SendMode, messangers::Key};
 
 #[derive(Debug)]
 pub struct SendMessageInfo {
     pub content: String,
+    pub freq: Option<String>,
     pub status: AtomicU8,
     pub groups_signal: Vec<GroupInfoSignal>,
     pub groups_whatsapp: Vec<GroupInfoWhatsapp>,
@@ -42,6 +43,7 @@ pub struct GroupInfoSignal {
     pub key: [u8; 32],
     pub title: String,
     pub(super) timestamp: AtomicU64,
+    pub send_mode: SendMode,
 }
 
 impl Clone for GroupInfoSignal {
@@ -50,13 +52,14 @@ impl Clone for GroupInfoSignal {
             key: self.key,
             title: self.title.clone(),
             timestamp: AtomicU64::new(self.timestamp.load(Ordering::Relaxed)),
+            send_mode: self.send_mode,
         }
     }
 }
 
 impl GroupInfoSignal {
-    pub fn new(key: [u8; 32], title: String) -> Self {
-        Self { key, title, timestamp: AtomicU64::new(0) }
+    pub fn new(key: [u8; 32], title: String, send_mode: SendMode) -> Self {
+        Self { key, title, timestamp: AtomicU64::new(0), send_mode }
     }
 
     pub fn set_timestamp(&self, timestamp: u64, ordering: std::sync::atomic::Ordering) {
@@ -84,6 +87,7 @@ pub struct GroupInfoWhatsapp {
     pub title: String,
     sent: AtomicBool,
     pub(super) sent_id: Mutex<String>,
+    pub send_mode: SendMode,
 }
 
 impl Clone for GroupInfoWhatsapp {
@@ -93,17 +97,19 @@ impl Clone for GroupInfoWhatsapp {
             title: self.title.clone(),
             sent: AtomicBool::new(self.sent.load(Ordering::Relaxed)),
             sent_id: Mutex::new(self.sent_id.lock().unwrap().clone()),
+            send_mode: self.send_mode
         }
     }
 }
 
 impl GroupInfoWhatsapp {
-    pub fn new(key: Jid, title: String) -> Self {
+    pub fn new(key: Jid, title: String, send_mode: SendMode) -> Self {
         Self {
             key,
             title,
             sent: AtomicBool::new(false),
             sent_id: Mutex::new(String::new()),
+            send_mode
         }
     }
 
@@ -112,7 +118,7 @@ impl GroupInfoWhatsapp {
     }
 
     pub fn delete(&self, ordering: Ordering) {
-        self.sent.store(false, Ordering::Relaxed);
+        self.sent.store(false, ordering);
     }
 
     pub fn set_id(&self, id: String) {
@@ -133,19 +139,20 @@ impl GroupInfoWhatsapp {
 }
 
 impl SendMessageInfo {
-    pub fn new(content: String) -> Self {
+    pub fn new(content: String, freq: Option<String>) -> Self {
         Self {
             content,
+            freq,
             status: AtomicU8::new(SendStatus::Pending as u8),
             groups_signal: Vec::new(),
             groups_whatsapp: Vec::new(),
         }
     }
 
-    pub fn push(&mut self, group_key: Key, title: String) {
+    pub fn push(&mut self, group_key: Key, title: String, send_mode: SendMode) {
         match group_key {
-            Key::Signal(key) => self.groups_signal.push(GroupInfoSignal::new(key, title)),
-            Key::Whatsapp(key) => self.groups_whatsapp.push(GroupInfoWhatsapp::new(key, title)),
+            Key::Signal(key) => self.groups_signal.push(GroupInfoSignal::new(key, title, send_mode)),
+            Key::Whatsapp(key) => self.groups_whatsapp.push(GroupInfoWhatsapp::new(key, title, send_mode)),
         }
     }
 

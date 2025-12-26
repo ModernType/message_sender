@@ -7,7 +7,7 @@ use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
 use whatsapp_rust_ureq_http_client::UreqHttpClient;
 use waproto::whatsapp as wa;
 
-use crate::{messangers::Key, ui::{self, main_screen::LinkState, message_history::{SendMessageInfo, SendStatus}}};
+use crate::{message::SendMode, messangers::Key, ui::{self, main_screen::LinkState, message_history::{SendMessageInfo, SendStatus}}};
 
 pub static UI_MESSAGE_SENDER: OnceLock<UnboundedSender<ui::Message>> = OnceLock::new();
 
@@ -70,12 +70,20 @@ pub async fn get_groups(client: Arc<Client>) -> anyhow::Result<Vec<(Key, String)
 
 pub async fn send_message(client: Arc<Client>, message: Arc<SendMessageInfo>) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-    let wa_message = wa::Message {
-        conversation: Some(message.content.clone()),
-        ..Default::default()
-    };
-
+    
     for group in message.groups_whatsapp.iter() {
+        let wa_message = wa::Message {
+            conversation: Some(
+                if let SendMode::Frequency = group.send_mode && let Some(ref freq) = message.freq {
+                    format!("{}\n{}", freq, &message.content)
+                }
+                else {
+                    message.content.clone()
+                }
+            ),
+            ..Default::default()
+        };
+
         let message_id = loop {
             match client.send_message(
                 group.key.clone(),
@@ -101,12 +109,17 @@ pub async fn send_message(client: Arc<Client>, message: Arc<SendMessageInfo>) {
 
 pub async fn edit_message(client: Arc<Client>, message: Arc<SendMessageInfo>, message_ids: Vec<String>) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-    let wa_message = wa::Message {
-        conversation: Some(message.content.clone()),
-        ..Default::default()
-    };
-
+    
     for (group, message_id) in message.groups_whatsapp.iter().zip(message_ids.into_iter()) {
+        let wa_message = wa::Message {
+            conversation: Some(if let SendMode::Frequency = group.send_mode && let Some(ref freq) = message.freq {
+                    format!("{}\n{}", freq, &message.content)
+                }
+                else {
+                    message.content.clone()
+                }),
+            ..Default::default()
+        };
         let message_id = loop {
             match client.edit_message(
                 group.key.clone(),

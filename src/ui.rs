@@ -90,7 +90,7 @@ impl App {
             whatsapp_client: None,
             cur_screen: Screen::Main,
             main_scr: MainScreen::new(data.autosend, groups, data.history_len),
-            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.send_mode, data.history_len),
+            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.history_len),
             signal_task_send: None,
             sync_interval: data.sync_interval,
             now: Instant::now(),
@@ -114,7 +114,6 @@ impl App {
             sync_interval: self.sync_interval,
             markdown: self.sett_scr.markdown,
             parallel: self.sett_scr.parallel,
-            send_mode: self.sett_scr.send_mode,
             history_len: self.sett_scr.history_len,
             recieve_address: self.sett_scr.recieve_address,
             signal_logged: self.signal_logged,
@@ -248,38 +247,26 @@ impl App {
             },
             Message::AcceptMessage(message) => {
                 let autosend = self.main_scr.autosend();
-                let send_mode = self.sett_scr.send_mode;
+            
+                let (messages, freqs) = match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
+                    Ok(msg) => msg.into_iter()
+                        .map(|msg| (msg.to_string(), Some(msg.0.frequency.to_string())))
+                        .unzip(),
+                    Err(_e) => (vec![message], vec![None])
+                };
 
-                let messages: Vec<String> = match send_mode {
-                SendMode::Standard => {
-                    match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
-                        Ok(messages) => messages.iter().map(OperatorMessage::to_string).collect(),
-                        Err(e) => {
-                            return Task::done(Message::Notification(format!("Error to parse messages: {}\nOriginal body: {}", &e, message)));
-                        }
-                    }
-                },
-                SendMode::Frequency => {
-                    match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
-                        Ok(messages) => messages.iter().map(OperatorMessage::with_frequency).collect(),
-                        Err(e) => {
-                            return Task::done(Message::Notification(format!("Error to parse messages: {}\nOriginal body: {}", &e, message)));
-                        }
-                    }
+                if autosend {
+                    Task::batch(
+                        messages.into_iter()
+                        .zip(freqs.into_iter())
+                        .map(|(message, freq)| Task::done(main_screen::Message::SendMessage(message, freq).into()))
+                    )
                 }
-                SendMode::Plain => {
-                    vec![message]
+                else {
+                    let message = messages.join("\n-------------------------\n");
+                    self.main_scr.stored_frequencies = freqs.into_iter().flatten().collect();
+                    Task::done(main_screen::Message::TextEdit(text_editor::Action::Edit(text_editor::Edit::Paste(Arc::new(message)))).into())
                 }
-            };
-            if autosend {
-                Task::batch(
-                    messages.into_iter().map(|s| Task::done(main_screen::Message::SendMessage(s).into()))
-                )
-            }
-            else {
-                let message = messages.join("\n");
-                Task::done(main_screen::Message::TextEdit(text_editor::Action::Edit(text_editor::Edit::Paste(Arc::new(message)))).into())
-            }
             },
             Message::OnClose => {
                 log::warn!("Closing application, saving data...");
@@ -355,7 +342,6 @@ pub struct AppData<'a> {
     pub cached_groups: Cow<'a, HashMap<Key, main_screen::Group>>,
     pub recieve_address: SocketAddrV4,
     pub autosend: bool,
-    pub send_mode: SendMode,
     pub sync_interval: u64,
     pub send_timeout: u64,
     pub markdown: bool,
@@ -371,7 +357,6 @@ impl Default for AppData<'_> {
             cached_groups: Cow::Owned(HashMap::new()),
             recieve_address: "127.0.0.1:8000".parse().unwrap(),
             autosend: false,
-            send_mode: SendMode::Standard,
             sync_interval: 10,
             send_timeout: 90,
             markdown: true,
@@ -404,13 +389,6 @@ impl AppData<'_> {
         config_file.write_all(s.as_bytes())?;
         Ok(())
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Display, Clone, Copy, PartialEq, Eq)]
-pub enum SendMode {
-    Standard,
-    Frequency,
-    Plain
 }
 
 #[derive(Debug)]

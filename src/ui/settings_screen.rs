@@ -2,7 +2,7 @@ use std::net::SocketAddrV4;
 
 use iced::{Alignment, Element, Length, Task, widget::{Column, button, checkbox, column, scrollable, svg, text, text_input}};
 
-use crate::ui::{SendMode, main_screen};
+use crate::ui::main_screen;
 
 use super::Message as MainMessage;
 
@@ -27,18 +27,16 @@ pub(super) struct SettingsScreen {
     pub parallel: bool,
     recieve_address_edit: String,
     pub recieve_address: SocketAddrV4,
-    pub send_mode: SendMode,
     pub history_len: u32,
 }
 
 impl SettingsScreen {
-    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, send_mode: SendMode, history_len: u32) -> Self {
+    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, history_len: u32) -> Self {
         Self {
             markdown,
             parallel,
             recieve_address,
             recieve_address_edit: recieve_address.to_string(),
-            send_mode,
             history_len,
         }
     }

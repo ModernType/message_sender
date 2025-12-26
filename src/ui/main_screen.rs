@@ -1,9 +1,9 @@
 use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
 
-use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
+use crate::{message::SendMode, messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -17,11 +17,11 @@ pub enum Message {
     SetWhatsappState(LinkState),
     SetAutoSend(bool),
     TextEdit(text_editor::Action),
-    SendMessage(String),
+    SendMessage(String, Option<String>),
     SendMessagePressed,
     LinkBegin,
     WhatsappLink,
-    ToggleGroup(Key, bool),
+    ToggleGroup(Key, SendMode),
     SetGroups(Vec<(Key, String)>),
     UpdateGroups,
     UpdateMessageHistory,
@@ -58,6 +58,7 @@ pub(super) struct MainScreen {
     now: Instant,
     show_signal_groups: bool,
     show_whatsapp_groups: bool,
+    pub stored_frequencies: Vec<String>,
 }
 
 impl MainScreen {
@@ -79,6 +80,7 @@ impl MainScreen {
             now: Instant::now(),
             show_signal_groups: true,
             show_whatsapp_groups: true,
+            stored_frequencies: Vec::new(),
         }
     }
 
@@ -129,16 +131,27 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
-                let text = self.message_content.text();
+                let mut text = self.message_content.text();
                 self.message_content = text_editor::Content::new();
-                return Task::done(Message::SendMessage(text).into())
+                match self.stored_frequencies.len() {
+                    0 => return Task::done(Message::SendMessage(text, None).into()),
+                    1 => return Task::done(Message::SendMessage(text, Some(self.stored_frequencies.remove(0))).into()),
+                    _ => {
+                        let freq = Some(self.stored_frequencies[0].clone());
+                        for freq in self.stored_frequencies.iter() {
+                            text.remove_matches(freq);
+                        }
+                        self.stored_frequencies.clear();
+                        return Task::done(Message::SendMessage(text, freq).into());
+                    }
+                }
             }
-            Message::SendMessage(message) => {
-                let mut message = SendMessageInfo::new(message);
+            Message::SendMessage(message, freq) => {
+                let mut message = SendMessageInfo::new(message, freq);
                 
                 for (key, group) in self.groups.iter() {
-                    if group.active {
-                        message.push(key.clone(), group.title.clone());
+                    if group.active() {
+                        message.push(key.clone(), group.title.clone(), group.send_mode);
                     }
                 }
                 let message = Arc::new(message);
@@ -162,13 +175,13 @@ impl MainScreen {
                 self.whatsapp_state = LinkState::Linking;
                 return Task::perform(whatsapp::start_whatsapp_task(), |_| MainMessage::None);
             },
-            Message::ToggleGroup(key, active) => {
-                self.groups.get_mut(&key).unwrap().active = active;
+            Message::ToggleGroup(key, send_mode) => {
+                self.groups.get_mut(&key).unwrap().send_mode = send_mode;
             },
             Message::SetGroups(groups) => {
                 for (key, title) in groups {
                     self.groups.entry(key)
-                    .or_insert(Group { title, active: false });
+                    .or_insert(Group { title, send_mode: SendMode::Off });
                 }
             },
             Message::UpdateGroups => {
@@ -278,9 +291,17 @@ impl MainScreen {
                 .collect::<Vec<_>>();
                 groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
                 groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                    checkbox(group.active)
+                    checkbox(group.active())
                     .label(&group.title)
-                    .on_toggle(move |state| Message::ToggleGroup(Key::Signal(key.clone()), state))
+                    .on_toggle(move |_| Message::ToggleGroup(Key::Signal(key.clone()), group.send_mode.next()))
+                    .icon(checkbox::Icon {
+                        font: Font::with_name("Material Icons"),
+                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
+                                    else { '\u{e5ca}' },
+                        size: Some(Pixels::from(14)),
+                        line_height: text::LineHeight::default(),
+                        shaping: text::Shaping::Basic,
+                    })
                 ))
             }))
             .push(
@@ -308,9 +329,17 @@ impl MainScreen {
                 .collect::<Vec<_>>();
                 groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
                 groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                    checkbox(group.active)
+                    checkbox(group.active())
                     .label(&group.title)
-                    .on_toggle(move |state| Message::ToggleGroup(Key::Whatsapp(key.clone()), state))
+                    .on_toggle(move |_| Message::ToggleGroup(Key::Whatsapp(key.clone()), group.send_mode.next()))
+                    .icon(checkbox::Icon {
+                        font: Font::with_name("Material Icons"),
+                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
+                                    else { '\u{e5ca}' },
+                        size: Some(Pixels::from(14)),
+                        line_height: text::LineHeight::default(),
+                        shaping: text::Shaping::Basic,
+                    })
                 ))
             }))
         )
@@ -560,7 +589,13 @@ impl MainScreen {
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Group {
     pub title: String,
-    pub active: bool,
+    pub send_mode: SendMode,
+}
+
+impl Group {
+    pub fn active(&self) -> bool {
+        self.send_mode.active()
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Display, Debug)]
 #[serde(from = "MessageOuter", bound = "'de: 'a")]
-pub struct Message<'a>(MessageInner<'a>);
+pub struct Message<'a>(pub MessageInner<'a>);
 
 impl<'a> From<MessageOuter<'a>> for Message<'a> {
     fn from(value: MessageOuter<'a>) -> Self {
@@ -26,18 +26,18 @@ impl<'a> Deref for Message<'a> {
 
 #[derive(Deserialize, Debug)]
 pub struct MessageInner<'a> {
-    message: MessageGroup,
-    comment: Option<&'a str>,
+    pub message: MessageGroup,
+    pub comment: Option<&'a str>,
     #[serde(rename = "rUser")]
-    reciever: Name<'a>,
+    pub reciever: Name<'a>,
     #[serde(rename = "tUser")]
-    sender: Name<'a>,
-    datetime: &'a str,
-    frequency: &'a str,
-    location: &'a str,
-    title: &'a str,
+    pub sender: Name<'a>,
+    pub datetime: &'a str,
+    pub frequency: &'a str,
+    pub location: &'a str,
+    pub title: &'a str,
     #[serde(rename = "source")]
-    _source: &'a str,
+    pub _source: &'a str,
 }
 
 impl<'a> Message<'a> {

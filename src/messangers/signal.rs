@@ -6,7 +6,7 @@ use presage::{libsignal_service::configuration::SignalServers, manager::Register
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::LocalSet;
 
-use crate::{messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}}};
+use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}}};
 
 type Manager = presage::Manager<SqliteStore, Registered>;
 
@@ -200,6 +200,7 @@ async fn send_message(
                     manager.clone(),
                     group,
                     &message.content,
+                    message.freq.as_ref().map(|s| s.as_str()),
                     markdown,
                 ).await {
                     Ok(_) => {
@@ -224,6 +225,7 @@ async fn send_message(
                         manager.clone(),
                         group,
                         &message.content,
+                        message.freq.as_ref().map(|s| s.as_str()),
                         markdown,
                     ).await {
                         Ok(_) => {
@@ -248,10 +250,18 @@ async fn send_message_inner(
     mut manager: Manager,
     group: &GroupInfoSignal,
     message: &str,
+    freq: Option<&str>,
     markdown: bool,
 ) -> anyhow::Result<()> {
     let mut message = if markdown {
         let (message, ranges) = crate::message::parse_message_with_format(message)?;
+        let message = if let SendMode::Frequency = group.send_mode && let Some(freq) = freq {
+            format!("{}\n{}", freq, message)
+        }
+        else {
+            message
+        };
+
         DataMessage {
             body: Some(message),
             body_ranges: ranges,
@@ -260,7 +270,14 @@ async fn send_message_inner(
     }
     else {
         DataMessage {
-            body: Some(message.to_owned()),
+            body: Some(
+                if let SendMode::Frequency = group.send_mode && let Some(freq) = freq {
+                    format!("{}\n{}", freq, message)
+                }
+                else {
+                    message.to_owned()
+                }
+            ),
             ..Default::default()
         }
     };
@@ -352,18 +369,29 @@ async fn edit_message(
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
+        let freq = message.freq.as_ref();
 
         let mut data_message = if markdown {
             let (message, ranges) = crate::message::parse_message_with_format(&message.content)?;
             DataMessage {
-                body: Some(message),
+                body: Some(if let SendMode::Frequency = group.send_mode && let Some(freq) = freq {
+                    format!("{}\n{}", freq, message)
+                }
+                else {
+                    message
+                }),
                 body_ranges: ranges,
                 ..Default::default()
             }
         }
         else {
             DataMessage {
-                body: Some(message.content.clone()),
+                body: Some(if let SendMode::Frequency = group.send_mode && let Some(freq) = freq {
+                    format!("{}\n{}", freq, message.content)
+                }
+                else {
+                    message.content.clone()
+                }),
                 ..Default::default()
             }
         };
