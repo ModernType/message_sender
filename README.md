@@ -8,10 +8,10 @@
 - [x] Full Op support
 - [x] Rich text support (Markdown)
 - [x] Sent messages history (working on edit and delete)
+- [x] WhatsApp
 - [ ] Send to contacts
 - [ ] Send categories
 - [ ] File sending
-- [ ] WhatsApp
 
 ## Installing
 Run the executable and you are good to go 👍

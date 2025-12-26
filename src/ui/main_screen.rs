@@ -188,11 +188,22 @@ impl MainScreen {
                 return Task::done(MainMessage::DeleteMessage(Arc::clone(&self.message_history[idx])))
             },
             Message::EditMessage(idx) => {
-                // FIXME: Edit another message while editing
-                let message = self.message_history.remove(idx).unwrap();
-                let content = text_editor::Content::with_text(&message.content);
-                self.message_content = content;
-                self.edit = Some(message);
+                match self.edit {
+                    Some(ref mut editing_message) => {
+                        std::mem::swap(
+                            editing_message,
+                            self.message_history.get_mut(idx).unwrap()
+                        );
+                        let content = text_editor::Content::with_text(&editing_message.content);
+                        self.message_content = content;
+                    },
+                    None => {
+                        let message = self.message_history.remove(idx).unwrap();
+                        let content = text_editor::Content::with_text(&message.content);
+                        self.message_content = content;
+                        self.edit = Some(message);
+                    }
+                }
             },
             Message::CancelEdit => {
                 self.message_content = text_editor::Content::new();
