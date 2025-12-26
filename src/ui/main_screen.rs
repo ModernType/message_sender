@@ -129,7 +129,6 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
-                // FIXME: Fix send of empty messages
                 let text = self.message_content.text();
                 self.message_content = text_editor::Content::new();
                 return Task::done(Message::SendMessage(text).into())
@@ -536,7 +535,10 @@ impl MainScreen {
                             })
                         )
                         .on_press_maybe(
-                            (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked).then_some(Message::SendMessagePressed)
+                            (
+                                (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
+                                && !self.message_content.is_empty()
+                            ).then_some(Message::SendMessagePressed)
                         )
                     )
                 }
