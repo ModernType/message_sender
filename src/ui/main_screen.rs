@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
 
-use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
 use crate::{message::SendMode, messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
@@ -407,6 +407,96 @@ impl MainScreen {
         )
     }
 
+    fn main_part(&self) -> Element<'_, Message> {
+        let col = Column::new()
+        .width(Length::FillPortion(6))
+        .height(Length::Fill)
+        .align_x(Horizontal::Center)
+        .spacing(10)
+        .padding(10);
+        
+        if self.register_url.is_some() || self.whatsapp_url.is_some() {
+            col.push_maybe(
+                self.register_url.as_ref().map(
+                    |data| responsive(
+                        |size| qr_code(data)
+                        .style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
+                        .total_size(size.height.min(size.width))
+                        .into()
+                    )
+                )
+            )
+            .push_maybe(
+                self.whatsapp_url.as_ref().map(
+                    |data| responsive(
+                        |size| qr_code(data)
+                        .style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
+                        .total_size(size.height.min(size.width))
+                        .into()
+                    )
+                )
+            )
+            .into()
+        }
+        else {
+            col.push(
+                text_editor(&self.message_content)
+                .placeholder("Введіть повідомлення")
+                .height(Length::Fill)
+                .on_action(Message::TextEdit)
+            )
+            .push(
+                if self.edit.is_some() {
+                    Element::from(
+                        Row::new()
+                        .spacing(5)
+                        .push(
+                            button(
+                                text("Відмінити")
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .style(button::secondary)
+                            .on_press(Message::CancelEdit)
+                        )
+                        .push(
+                            button(
+                                text("Редагувати")
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .on_press(Message::ConfirmEdit)
+                        )
+                    )
+                }
+                else {
+                    Element::from(
+                        button(
+                            text("Надіслати повідомлення")
+                            .center()
+                            .width(Length::Fill)
+                            .font(iced::Font {
+                                weight: iced::font::Weight::Bold,
+                                ..iced::Font::DEFAULT
+                            })
+                        )
+                        .on_press_maybe(
+                            (
+                                (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
+                                && !self.message_content.is_empty()
+                            ).then_some(Message::SendMessagePressed)
+                        )
+                    )
+                }
+            )
+            .push(
+                checkbox(self.autosend)
+                .label("Автоматична відправка")
+                .on_toggle(Message::SetAutoSend)
+            ).into()
+        }
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         Row::new()
         .spacing(7)
@@ -501,83 +591,12 @@ impl MainScreen {
                     )
                 )
             )
-            .push_maybe(
-                self.register_url.as_ref().map(
-                    |data| qr_code(data).style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
-                )
-            )
-            .push_maybe(
-                self.whatsapp_url.as_ref().map(
-                    |data| qr_code(data).style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
-                )
-            )
             .push(
                 self.group_list()
             )
         )
         .push(
-            Column::new()
-            .width(Length::FillPortion(6))
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .spacing(10)
-            .padding(10)
-            .push(
-                text_editor(&self.message_content)
-                .placeholder("Введіть повідомлення")
-                .height(Length::Fill)
-                .on_action(Message::TextEdit)
-            )
-            .push(
-                if self.edit.is_some() {
-                    Element::from(
-                        Row::new()
-                        .spacing(5)
-                        .push(
-                            button(
-                                text("Відмінити")
-                                .center()
-                                .width(Length::Fill)
-                            )
-                            .style(button::secondary)
-                            .on_press(Message::CancelEdit)
-                        )
-                        .push(
-                            button(
-                                text("Редагувати")
-                                .center()
-                                .width(Length::Fill)
-                            )
-                            .on_press(Message::ConfirmEdit)
-                        )
-                    )
-                }
-                else {
-                    Element::from(
-                        button(
-                            text("Надіслати повідомлення")
-                            .center()
-                            .width(Length::Fill)
-                            .font(iced::Font {
-                                weight: iced::font::Weight::Bold,
-                                ..iced::Font::DEFAULT
-                            })
-                        )
-                        .on_press_maybe(
-                            (
-                                (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
-                                && !self.message_content.is_empty()
-                            ).then_some(Message::SendMessagePressed)
-                        )
-                    )
-                }
-            )
-            .push(
-                checkbox(self.autosend)
-                .label("Автоматична відправка")
-                .on_toggle(Message::SetAutoSend)
-            )
-            
+            self.main_part()
         )
         .push(
             self.message_history()
