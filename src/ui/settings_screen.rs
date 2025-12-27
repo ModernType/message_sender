@@ -1,6 +1,6 @@
 use std::net::SocketAddrV4;
 
-use iced::{Alignment, Element, Length, Task, widget::{Column, button, checkbox, column, scrollable, svg, text, text_input}};
+use iced::{Alignment, Element, Font, Length, Task, widget::{Column, button, checkbox, column, rich_text, scrollable, span, svg, text, text_input}};
 
 use crate::ui::main_screen;
 
@@ -26,6 +26,7 @@ pub(super) struct SettingsScreen {
     pub markdown: bool,
     pub parallel: bool,
     recieve_address_edit: String,
+    address_correct: bool,
     pub recieve_address: SocketAddrV4,
     pub history_len: u32,
 }
@@ -37,6 +38,7 @@ impl SettingsScreen {
             parallel,
             recieve_address,
             recieve_address_edit: recieve_address.to_string(),
+            address_correct: true,
             history_len,
         }
     }
@@ -51,8 +53,12 @@ impl SettingsScreen {
                 self.parallel = parallel;
             },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
-                if let Ok(addr) = recieve_address_edit.parse() {
-                    self.recieve_address = addr;
+                match recieve_address_edit.parse() {
+                    Ok(addr) => {
+                        self.recieve_address = addr;
+                        self.address_correct = true;
+                    },
+                    Err(_) => self.address_correct = false,
                 }
                 self.recieve_address_edit = recieve_address_edit;
             },
@@ -88,11 +94,24 @@ impl SettingsScreen {
                 .height(Length::Fill)
                 .align_x(Alignment::Center)
                 .push(
-                    column![
-                        text("Адреса серверу для прийому повідомлень"),
+                    Column::new()
+                    .push(
+                        text("Адреса серверу для прийому повідомлень")
+                    )
+                    .push(
                         text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
+                        .style(|theme, status| {
+                            let mut default = text_input::default(theme, status);
+                            if !self.address_correct {
+                                default.border.color = theme.palette().danger;
+                            }
+                            default
+                        })
                         .on_input(Message::RecieveAddressEditChanged)
-                    ]
+                    )
+                    .push(
+                        text("Програму потрібно перезапустити, щоб зміни вступили у силу").font(Font { style:iced::font::Style::Italic, ..Default::default() })
+                    )
                 )
                 .push(
                     column![
