@@ -89,6 +89,20 @@ pub fn parse_message_with_format(message: &str) -> Result<(String, Vec<BodyRange
     )
 }
 
+pub fn parse_message_with_whatsapp_format(message: &str) -> Result<String, pest::error::Error<Rule>> {
+    let mut buf = String::with_capacity(message.len());
+    for rule in parse_into_rules(message)? {
+        match rule.as_rule() {
+            Rule::text => buf.push_str(rule.as_str()),
+            Rule::bold => buf.push('*'),
+            Rule::italic => buf.push('_'),
+            Rule::strikethrough => buf.push('~'),
+            _ => continue,
+        }
+    }
+    Ok(buf)
+}
+
 #[cfg(test)]
 mod test {
     use crate::message::format::parse_message_with_format;

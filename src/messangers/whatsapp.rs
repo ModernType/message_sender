@@ -7,7 +7,7 @@ use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
 use whatsapp_rust_ureq_http_client::UreqHttpClient;
 use waproto::whatsapp as wa;
 
-use crate::{message::SendMode, messangers::Key, ui::{self, main_screen::LinkState, message_history::{SendMessageInfo, SendStatus}}};
+use crate::{message::{SendMode, parse_message_with_whatsapp_format}, messangers::Key, ui::{self, main_screen::LinkState, message_history::{SendMessageInfo, SendStatus}}};
 
 pub static UI_MESSAGE_SENDER: OnceLock<UnboundedSender<ui::Message>> = OnceLock::new();
 
@@ -68,17 +68,24 @@ pub async fn get_groups(client: Arc<Client>) -> anyhow::Result<Vec<(Key, String)
     )
 }
 
-pub async fn send_message(client: Arc<Client>, message: Arc<SendMessageInfo>) {
+pub async fn send_message(client: Arc<Client>, message: Arc<SendMessageInfo>, markdown: bool) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+
+    let content = if markdown {
+        parse_message_with_whatsapp_format(&message.content).unwrap_or(message.content.clone())
+    }
+    else {
+        message.content.clone()
+    };
     
     for group in message.groups_whatsapp.iter() {
         let wa_message = wa::Message {
             conversation: Some(
                 if let SendMode::Frequency = group.send_mode && let Some(ref freq) = message.freq {
-                    format!("{}\n{}", freq, &message.content)
+                    format!("{}\n{}", freq, &content)
                 }
                 else {
-                    message.content.clone()
+                    content.clone()
                 }
             ),
             ..Default::default()
@@ -107,16 +114,22 @@ pub async fn send_message(client: Arc<Client>, message: Arc<SendMessageInfo>) {
     message.set_status(SendStatus::Sent, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub async fn edit_message(client: Arc<Client>, message: Arc<SendMessageInfo>, message_ids: Vec<String>) {
+pub async fn edit_message(client: Arc<Client>, message: Arc<SendMessageInfo>, message_ids: Vec<String>, markdown: bool) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+    let content = if markdown {
+        parse_message_with_whatsapp_format(&message.content).unwrap_or(message.content.clone())
+    }
+    else {
+        message.content.clone()
+    };
     
     for (group, message_id) in message.groups_whatsapp.iter().zip(message_ids.into_iter()) {
         let wa_message = wa::Message {
             conversation: Some(if let SendMode::Frequency = group.send_mode && let Some(ref freq) = message.freq {
-                    format!("{}\n{}", freq, &message.content)
+                    format!("{}\n{}", freq, &content)
                 }
                 else {
-                    message.content.clone()
+                    content.clone()
                 }),
             ..Default::default()
         };

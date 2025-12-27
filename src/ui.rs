@@ -211,7 +211,7 @@ impl App {
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::send_message(client.clone(), message), |_| Message::None)
+                        Task::perform(whatsapp::send_message(client.clone(), message, self.sett_scr.markdown), |_| Message::None)
                     );
                 }
                 Task::batch(task_list)
@@ -240,7 +240,7 @@ impl App {
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::edit_message(client.clone(), message, whatsapp_ids), |_| Message::None)
+                        Task::perform(whatsapp::edit_message(client.clone(), message, whatsapp_ids, self.sett_scr.markdown), |_| Message::None)
                     );
                 }
                 Task::batch(task_list)
