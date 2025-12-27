@@ -10,14 +10,13 @@ use crate::ui;
 pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<()> {
     info!("Binding on addr {}", &addr);
     let listener = loop {
-        match TcpListener::bind(addr).await {
+        match TcpListener::bind(&addr).await {
             Ok(listener) => {
+                msg_send_channel.send(ui::Message::Notification(format!("Прийом повідомлень запущено на {}", &addr))).await.unwrap();
                 break listener
             },
             Err(_e) => {
-                // _ = app_handle.upgrade_in_event_loop(move |app| {
-                //     app.invoke_report(slint::format!("Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її у налаштуваннях", &addr));
-                // });
+                msg_send_channel.send(ui::Message::Notification(format!("Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її, будь ласка, у налаштуваннях", &addr))).await.unwrap();
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
