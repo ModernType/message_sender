@@ -60,7 +60,7 @@ impl<'a> Display for MessageInner<'a> {
         writeln!(f, "Відправник: {}", self.sender)?;
         f.write_char('\n')?;
         write!(f, "{}", self.message)?;
-        if let Some(comment) = self.comment {
+        if let Some(comment) = self.comment && !comment.is_empty() {
             f.write_char('\n')?;
             write!(f, "Коментар: {}", comment)?;
         }

@@ -263,7 +263,7 @@ impl App {
                     )
                 }
                 else {
-                    let message = messages.join("\n-------------------------\n");
+                    let message = messages.join("\n\n-------------------------\n\n");
                     self.main_scr.stored_frequencies = freqs.into_iter().flatten().collect();
                     Task::done(main_screen::Message::TextEdit(text_editor::Action::Edit(text_editor::Edit::Paste(Arc::new(message)))).into())
                 }
