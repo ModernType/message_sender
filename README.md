@@ -5,9 +5,8 @@
 - [x] Sync with secondary device
 - [x] Edit and send messages to selected groups
 - [x] Accept messages sent to the app
-- [x] Full Op support
 - [x] Rich text support (Markdown)
-- [x] Sent messages history (working on edit and delete)
+- [x] Sent messages history
 - [x] WhatsApp
 - [ ] Send to contacts
 - [ ] Send categories
@@ -17,7 +16,7 @@
 Run the executable and you are good to go 👍
 
 ## Building
-For compilation you need [rust toolchain](https://rust-lang.org) to be installed.
+For compilation you need *nightly* [rust toolchain](https://rust-lang.org) to be installed.
 
 Clone the project using `git`:
 
