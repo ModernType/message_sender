@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{message::SendMode, messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
+use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -34,6 +34,7 @@ pub enum Message {
     SetHistoryLimit(u32),
     ShowSignalGroups(bool),
     ShowWhatsappGroups(bool),
+    NextMessage,
 }
 
 impl From<Message> for MainMessage {
@@ -58,7 +59,8 @@ pub(super) struct MainScreen {
     now: Instant,
     show_signal_groups: bool,
     show_whatsapp_groups: bool,
-    pub stored_frequencies: Vec<String>,
+    pub message_queue: Vec<AcceptedMessage>,
+    pub cur_message: Option<AcceptedMessage>
 }
 
 impl MainScreen {
@@ -76,11 +78,12 @@ impl MainScreen {
             show_message_history: Animation::new(false)
                 .slow()
                 .easing(iced::animation::Easing::EaseInOut),
-            edit: Default::default(),
+            edit: None,
             now: Instant::now(),
             show_signal_groups: true,
             show_whatsapp_groups: true,
-            stored_frequencies: Vec::new(),
+            message_queue: Vec::new(),
+            cur_message: None,
         }
     }
 
@@ -131,20 +134,20 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
-                let mut text = self.message_content.text();
-                self.message_content = text_editor::Content::new();
-                match self.stored_frequencies.len() {
-                    0 => return Task::done(Message::SendMessage(text, None).into()),
-                    1 => return Task::done(Message::SendMessage(text, Some(self.stored_frequencies.remove(0))).into()),
-                    _ => {
-                        let freq = Some(self.stored_frequencies[0].clone());
-                        for freq in self.stored_frequencies.iter() {
-                            text.remove_matches(freq);
-                        }
-                        self.stored_frequencies.clear();
-                        return Task::done(Message::SendMessage(text, freq).into());
-                    }
+                let (text, freq) = if let Some(mut message) = self.cur_message.take() {
+                    message.text = self.message_content.text();
+                    (message.text, message.freq)
                 }
+                else {
+                    (self.message_content.text(), None)
+                };
+
+                self.message_content = text_editor::Content::new();
+
+                return Task::batch([
+                    Task::done(Message::NextMessage.into()),
+                    Task::done(Message::SendMessage(text, freq).into()),
+                ])
             }
             Message::SendMessage(message, freq) => {
                 let mut message = SendMessageInfo::new(message, freq);
@@ -257,6 +260,15 @@ impl MainScreen {
             Message::ShowWhatsappGroups(show) => {
                 self.show_whatsapp_groups = show;
             },
+            Message::NextMessage => {
+                self.cur_message = self.message_queue.pop();
+                if let Some(message) = &self.cur_message {
+                    self.message_content = text_editor::Content::with_text(&message.text);
+                }
+                else {
+                    self.message_content = text_editor::Content::new();
+                }
+            }
         }
 
         Task::none()
@@ -467,6 +479,29 @@ impl MainScreen {
                                 .width(Length::Fill)
                             )
                             .on_press(Message::ConfirmEdit)
+                        )
+                    )
+                }
+                else if self.cur_message.is_some() {
+                    Element::from(
+                        Row::new()
+                        .spacing(5)
+                        .push(
+                            button(
+                                text("Відмінити")
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .style(button::secondary)
+                            .on_press(Message::NextMessage)
+                        )
+                        .push(
+                            button(
+                                text("Надіслати повідомлення")
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .on_press(Message::SendMessagePressed)
                         )
                     )
                 }

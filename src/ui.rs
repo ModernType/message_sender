@@ -7,7 +7,7 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server, messangers::{Key, whatsapp}, send_categories::SendCategory, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
+use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::SendCategory, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -39,7 +39,7 @@ pub enum Message {
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>, Vec<u64>, Vec<String>),
     SetScreen(Screen),
-    AcceptMessage(String),
+    AcceptMessage(Vec<AcceptedMessage>),
     ThemeChange(Theme),
     OnClose,
     UpdateGroupList,
@@ -256,31 +256,24 @@ impl App {
                 }
                 Task::batch(task_list)
             },
-            Message::AcceptMessage(message) => {
-                let mut autosend = self.main_scr.autosend();
-            
-                let (messages, freqs) = match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
-                    Ok(msg) => msg.into_iter()
-                        .map(|msg| (msg.to_string(), Some(msg.0.frequency.to_string())))
-                        .unzip(),
-                    Err(_e) => {
-                        log::error!("Error deserializing message");
-                        autosend = false;
-                        (vec![message], vec![None])
-                    }
-                };
-
+            Message::AcceptMessage(messages) => {
+                let autosend = messages.iter().fold(self.main_scr.autosend(), |autosend, msg| autosend && !msg.autosend_overwrite);
+                
                 if autosend {
                     Task::batch(
-                        messages.into_iter()
-                        .zip(freqs.into_iter())
-                        .map(|(message, freq)| Task::done(main_screen::Message::SendMessage(message, freq).into()))
+                        messages
+                        .into_iter()
+                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.text, msg.freq).into()))
                     )
                 }
                 else {
-                    let message = messages.join("\n\n-------------------------\n\n");
-                    self.main_scr.stored_frequencies = freqs.into_iter().flatten().collect();
-                    Task::done(main_screen::Message::TextEdit(text_editor::Action::Edit(text_editor::Edit::Paste(Arc::new(message)))).into())
+                    self.main_scr.message_queue.extend(messages);
+                    if self.main_scr.cur_message.is_none() {
+                        Task::done(main_screen::Message::NextMessage.into())
+                    }
+                    else {
+                        Task::none()
+                    }
                 }
             },
             Message::OnClose => {

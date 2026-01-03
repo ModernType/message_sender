@@ -70,7 +70,6 @@ impl<'a> Display for MessageInner<'a> {
 }
 
 #[derive(Deserialize, Default)]
-#[serde(default)]
 struct MessageOuter<'a> {
     #[serde(rename = "Key")]
     _freq: &'a str,
@@ -79,7 +78,7 @@ struct MessageOuter<'a> {
 }
 
 #[derive(Deserialize, Debug,Default)]
-#[serde(transparent, default)]
+#[serde(transparent)]
 struct MessageGroup(Vec<IndividualMessage>);
 
 impl Display for MessageGroup {
@@ -93,7 +92,6 @@ impl Display for MessageGroup {
 }
 
 #[derive(Deserialize, Display, Debug, Default)]
-#[serde(default)]
 #[display("{message}")]
 struct IndividualMessage {
     #[serde(rename = "Key")]
@@ -111,7 +109,7 @@ impl Deref for IndividualMessage {
 }
 
 #[derive(Debug, Deserialize, Display, Default)]
-#[serde(from = "String", default)]
+#[serde(from = "String")]
 struct CleanedMessage(String);
 
 impl From<String> for CleanedMessage {
@@ -121,7 +119,7 @@ impl From<String> for CleanedMessage {
 }
 
 #[derive(Deserialize, Display, Debug, Default)]
-#[serde(from = "Option<&str>", default)]
+#[serde(from = "Option<&str>")]
 struct Name<'a>(&'a str);
 
 impl<'a> Deref for Name<'a> {
