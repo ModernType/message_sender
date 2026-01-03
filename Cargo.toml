@@ -36,6 +36,7 @@ features = [
     "tokio",
     "qr_code",
     "svg",
+    "highlighter",
 ]
 
 [dependencies.tokio]

@@ -444,6 +444,7 @@ impl MainScreen {
                 .placeholder("Введіть повідомлення")
                 .height(Length::Fill)
                 .on_action(Message::TextEdit)
+                .highlight("md", iced::highlighter::Theme::SolarizedDark)
             )
             .push(
                 if self.edit.is_some() {
