@@ -6,8 +6,8 @@ use std::{
 use derive_more::Display;
 use serde::Deserialize;
 
-#[derive(Deserialize, Display, Debug)]
-#[serde(from = "MessageOuter", bound = "'de: 'a")]
+#[derive(Deserialize, Display, Debug, Default)]
+#[serde(from = "MessageOuter", bound = "'de: 'a", default)]
 pub struct Message<'a>(pub MessageInner<'a>);
 
 impl<'a> From<MessageOuter<'a>> for Message<'a> {
@@ -24,7 +24,8 @@ impl<'a> Deref for Message<'a> {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
+#[serde(default)]
 pub struct MessageInner<'a> {
     pub message: MessageGroup,
     pub comment: Option<&'a str>,
@@ -68,7 +69,8 @@ impl<'a> Display for MessageInner<'a> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
+#[serde(default)]
 struct MessageOuter<'a> {
     #[serde(rename = "Key")]
     _freq: &'a str,
@@ -76,8 +78,8 @@ struct MessageOuter<'a> {
     message: MessageInner<'a>,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(transparent)]
+#[derive(Deserialize, Debug,Default)]
+#[serde(transparent, default)]
 struct MessageGroup(Vec<IndividualMessage>);
 
 impl Display for MessageGroup {
@@ -90,7 +92,8 @@ impl Display for MessageGroup {
     }
 }
 
-#[derive(Deserialize, Display, Debug)]
+#[derive(Deserialize, Display, Debug, Default)]
+#[serde(default)]
 #[display("{message}")]
 struct IndividualMessage {
     #[serde(rename = "Key")]
@@ -107,8 +110,8 @@ impl Deref for IndividualMessage {
     }
 }
 
-#[derive(Debug, Deserialize, Display)]
-#[serde(from = "String")]
+#[derive(Debug, Deserialize, Display, Default)]
+#[serde(from = "String", default)]
 struct CleanedMessage(String);
 
 impl From<String> for CleanedMessage {
@@ -117,8 +120,8 @@ impl From<String> for CleanedMessage {
     }
 }
 
-#[derive(Deserialize, Display, Debug)]
-#[serde(from = "Option<&str>")]
+#[derive(Deserialize, Display, Debug, Default)]
+#[serde(from = "Option<&str>", default)]
 struct Name<'a>(&'a str);
 
 impl<'a> Deref for Name<'a> {
