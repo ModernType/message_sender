@@ -7,7 +7,7 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server, messangers::{Key, whatsapp}, ui::main_screen::LinkState};
+use crate::{message::OperatorMessage, message_server, messangers::{Key, whatsapp}, ui::{main_screen::LinkState, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -15,6 +15,7 @@ pub mod main_screen;
 pub mod settings_screen;
 pub mod message_history;
 mod ext;
+mod theme;
 
 const NOTIFICATION_SHOW_TIME: u64 = 3000;
 
@@ -24,7 +25,6 @@ pub enum Screen {
     Settings,
 }
 
-#[derive(Clone)]
 pub enum Message {
     MainScrMessage(main_screen::Message),
     SettingsScrMessage(settings_screen::Message),
@@ -37,6 +37,7 @@ pub enum Message {
     EditMessage(Arc<SendMessageInfo>, Vec<u64>, Vec<String>),
     SetScreen(Screen),
     AcceptMessage(String),
+    ThemeChange(Theme),
     OnClose,
     UpdateGroupList,
     Synced,
@@ -67,7 +68,6 @@ pub struct App {
     sync_interval: u64,
     now: Instant,
     notification: Notification,
-    theme: iced::Theme,
     signal_logged: bool,
     whatsapp_logged: bool,
 }
@@ -82,29 +82,32 @@ impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new() -> (Self, Task<Message>) {
         let data = AppData::new();
         let groups = data.cached_groups.into_owned();
-        Self {
-            manager: None,
-            whatsapp_client: None,
-            cur_screen: Screen::Main,
-            main_scr: MainScreen::new(data.autosend, groups, data.history_len),
-            sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.history_len),
-            signal_task_send: None,
-            sync_interval: data.sync_interval,
-            now: Instant::now(),
-            notification: Notification::new(),
-            theme: {
-                match dark_light::detect().unwrap_or(dark_light::Mode::Unspecified) {
-                    dark_light::Mode::Light => iced::Theme::CatppuccinLatte,
-                    dark_light::Mode::Dark => iced::Theme::Dracula,
-                    dark_light::Mode::Unspecified => iced::Theme::CatppuccinLatte,
-                }
-            },
-            signal_logged: data.signal_logged,
-            whatsapp_logged: data.whatsapp_logged,
+        let start_task = if data.theme.is_system() {
+            iced::system::theme().map(|mode| Message::ThemeChange(mode.into()))
         }
+        else {
+            Task::none()
+        };
+
+        (
+            Self {
+                manager: None,
+                whatsapp_client: None,
+                cur_screen: Screen::Main,
+                main_scr: MainScreen::new(data.autosend, groups, data.history_len),
+                sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.history_len, data.theme),
+                signal_task_send: None,
+                sync_interval: data.sync_interval,
+                now: Instant::now(),
+                notification: Notification::new(),
+                signal_logged: data.signal_logged,
+                whatsapp_logged: data.whatsapp_logged,
+            },
+            start_task
+        )
     }
 
     fn save(&self) -> anyhow::Result<()> {
@@ -118,7 +121,8 @@ impl App {
             recieve_address: self.sett_scr.recieve_address,
             signal_logged: self.signal_logged,
             whatsapp_logged: self.whatsapp_logged,
-            ..Default::default()
+            theme: self.sett_scr.theme_selected.clone(),
+            send_timeout: 90,
         };
         data.save()
     }
@@ -290,6 +294,29 @@ impl App {
                 }
                 Task::none()
             },
+            Message::ThemeChange(theme) => {
+                log::info!("Changing theme to: {}", &theme);
+                match theme {
+                    Theme::System => {
+                        iced::system::theme().map(|mode| Message::ThemeChange(mode.into()))
+                    },
+                    Theme::Light if self.sett_scr.theme_selected.is_system() => {
+                        self.sett_scr.theme_selected = Theme::Light;
+                        Task::none()
+                    }
+                    Theme::Dark if self.sett_scr.theme_selected.is_system() => {
+                        self.sett_scr.theme_selected = Theme::Dark;
+                        Task::none()
+                    }
+                    Theme::Selected(theme) => {
+                        self.sett_scr.theme_selected = Theme::Selected(theme);
+                        Task::none()
+                    }
+                    _ => {
+                        Task::none()
+                    },
+                }
+            },
             Message::None => Task::done(main_screen::Message::UpdateMessageHistory.into()),
         }
     }
@@ -312,6 +339,7 @@ impl App {
 
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            iced::system::theme_changes().map(|mode| Message::ThemeChange(mode.into())),
             Subscription::run(Self::setup_subscription),
             iced::time::every(std::time::Duration::from_secs(self.sync_interval)).map(|_| Message::UpdateGroupList),
             iced::window::close_requests().map(|_| Message::OnClose),
@@ -336,7 +364,7 @@ impl App {
     }
 
     pub fn theme(&self) -> iced::Theme {
-        self.theme.clone()
+        self.sett_scr.theme_selected.as_theme().clone()
     }
 }
 
@@ -353,6 +381,7 @@ pub struct AppData<'a> {
     pub history_len: u32,
     pub signal_logged: bool,
     pub whatsapp_logged: bool,
+    pub theme: Theme,
 }
 
 impl Default for AppData<'_> {
@@ -368,6 +397,7 @@ impl Default for AppData<'_> {
             history_len: 20,
             signal_logged: false,
             whatsapp_logged: false,
+            theme: Theme::None,
         }
     }
 }

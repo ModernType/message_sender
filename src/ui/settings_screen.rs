@@ -1,8 +1,8 @@
 use std::net::SocketAddrV4;
 
-use iced::{Alignment, Element, Font, Length, Task, widget::{Column, button, checkbox, column, rich_text, scrollable, span, svg, text, text_input}};
+use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, rich_text, scrollable, span, svg, text, text_input}};
 
-use crate::ui::main_screen;
+use crate::ui::{main_screen, theme::Theme};
 
 use super::Message as MainMessage;
 
@@ -13,6 +13,7 @@ pub enum Message {
     ToggleParallel(bool),
     RecieveAddressEditChanged(String),
     HistoryLenEdit(String),
+    ThemeSelected(Theme),
 }
 
 impl From<Message> for MainMessage {
@@ -29,10 +30,11 @@ pub(super) struct SettingsScreen {
     address_correct: bool,
     pub recieve_address: SocketAddrV4,
     pub history_len: u32,
+    pub theme_selected: Theme,
 }
 
 impl SettingsScreen {
-    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, history_len: u32) -> Self {
+    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, history_len: u32, theme: Theme) -> Self {
         Self {
             markdown,
             parallel,
@@ -40,6 +42,7 @@ impl SettingsScreen {
             recieve_address_edit: recieve_address.to_string(),
             address_correct: true,
             history_len,
+            theme_selected: theme,
         }
     }
 
@@ -67,6 +70,10 @@ impl SettingsScreen {
                     self.history_len = num;
                     return Task::done(main_screen::Message::SetHistoryLimit(num).into());
                 }
+            },
+            Message::ThemeSelected(theme) => {
+                self.theme_selected = theme.clone();
+                return Task::done(MainMessage::ThemeChange(theme));
             }
         }
 
@@ -129,6 +136,21 @@ impl SettingsScreen {
                     checkbox(self.parallel)
                     .label("Здійснювати відправку повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
                     .on_toggle(Message::ToggleParallel)
+                )
+                .push(
+                    Row::new()
+                    .spacing(5)
+                    .push(
+                        text("Тема додатку")
+                        .center()
+                    )
+                    .push(
+                        pick_list(
+                            Theme::ALL, 
+                            Some(&self.theme_selected),
+                            Message::ThemeSelected
+                        )
+                    )
                 )
             )
             .width(Length::Fill)
