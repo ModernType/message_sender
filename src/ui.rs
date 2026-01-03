@@ -246,13 +246,17 @@ impl App {
                 Task::batch(task_list)
             },
             Message::AcceptMessage(message) => {
-                let autosend = self.main_scr.autosend();
+                let mut autosend = self.main_scr.autosend();
             
                 let (messages, freqs) = match serde_json::from_str::<Vec<OperatorMessage>>(&message) {
                     Ok(msg) => msg.into_iter()
                         .map(|msg| (msg.to_string(), Some(msg.0.frequency.to_string())))
                         .unzip(),
-                    Err(_e) => (vec![message], vec![None])
+                    Err(_e) => {
+                        log::error!("Error deserializing message");
+                        autosend = false;
+                        (vec![message], vec![None])
+                    }
                 };
 
                 if autosend {
