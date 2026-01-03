@@ -1,0 +1,3 @@
+[alias]
+h = "hot --features hot"
+release = "build -r"
