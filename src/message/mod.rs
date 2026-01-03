@@ -6,7 +6,7 @@ pub use deserialize::{Message as OperatorMessage, MessageInner};
 pub use format::{parse_message_with_format, parse_message_with_whatsapp_format};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, Hash, PartialEq, Eq)]
 pub enum SendMode {
     #[default]
     Off,

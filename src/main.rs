@@ -9,6 +9,7 @@ mod ui;
 mod message;
 mod messangers;
 mod message_server;
+mod send_categories;
 #[cfg(test)]
 mod test;
 

@@ -7,13 +7,14 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server, messangers::{Key, whatsapp}, ui::{main_screen::LinkState, theme::Theme}};
+use crate::{message::OperatorMessage, message_server, messangers::{Key, whatsapp}, send_categories::SendCategory, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
 pub mod main_screen;
 pub mod settings_screen;
 pub mod message_history;
+pub mod category_screen;
 mod ext;
 mod theme;
 
@@ -23,11 +24,13 @@ const NOTIFICATION_SHOW_TIME: u64 = 3000;
 pub enum Screen {
     Main,
     Settings,
+    Categories
 }
 
 pub enum Message {
     MainScrMessage(main_screen::Message),
     SettingsScrMessage(settings_screen::Message),
+    CategoriesScrMessage(category_screen::Message),
     SignalMessage(SignalMessage),
     SetManager(Manager<SqliteStore, Registered>),
     SetWhatsappClient(Option<Arc<whatsapp_rust::Client>>),
@@ -64,6 +67,7 @@ pub struct App {
     whatsapp_client: Option<Arc<whatsapp_rust::Client>>,
     main_scr: MainScreen,
     sett_scr: SettingsScreen,
+    category_scr: CategoryScreen,
     signal_task_send: Option<UnboundedSender<SignalMessage>>,
     sync_interval: u64,
     now: Instant,
@@ -99,6 +103,7 @@ impl App {
                 cur_screen: Screen::Main,
                 main_scr: MainScreen::new(data.autosend, groups, data.history_len),
                 sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.history_len, data.theme),
+                category_scr: CategoryScreen::new(data.categories),
                 signal_task_send: None,
                 sync_interval: data.sync_interval,
                 now: Instant::now(),
@@ -123,6 +128,7 @@ impl App {
             whatsapp_logged: self.whatsapp_logged,
             theme: self.sett_scr.theme_selected.clone(),
             send_timeout: 90,
+            categories: self.category_scr.categories.clone(),
         };
         data.save()
     }
@@ -138,6 +144,7 @@ impl App {
         match message {
             Message::MainScrMessage(m) => self.main_scr.update(m, now),
             Message::SettingsScrMessage(m) => self.sett_scr.update(m),
+            Message::CategoriesScrMessage(m) => self.category_scr.update(m),
             Message::SignalMessage(m) => {
                 if let Some(channel) = self.signal_task_send.as_ref() {
                     let mut channel = channel.clone();
@@ -329,6 +336,7 @@ impl App {
             match self.cur_screen {
                 Screen::Main => self.main_scr.view().map(Into::into),
                 Screen::Settings => self.sett_scr.view().map(Into::into),
+                Screen::Categories => self.category_scr.view().map(Into::into)
             }
         )
         .push(
@@ -382,6 +390,7 @@ pub struct AppData<'a> {
     pub signal_logged: bool,
     pub whatsapp_logged: bool,
     pub theme: Theme,
+    pub categories: Vec<SendCategory>,
 }
 
 impl Default for AppData<'_> {
@@ -398,6 +407,7 @@ impl Default for AppData<'_> {
             signal_logged: false,
             whatsapp_logged: false,
             theme: Theme::None,
+            categories: Vec::new(),
         }
     }
 }

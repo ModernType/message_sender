@@ -606,7 +606,7 @@ impl MainScreen {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Group {
     pub title: String,
     pub send_mode: SendMode,
