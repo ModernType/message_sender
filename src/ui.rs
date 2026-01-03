@@ -7,7 +7,7 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::SendCategory, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
+use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -103,7 +103,7 @@ impl App {
                 cur_screen: Screen::Main,
                 main_scr: MainScreen::new(data.autosend, groups, data.history_len),
                 sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.history_len, data.theme),
-                category_scr: CategoryScreen::new(data.categories),
+                category_scr: CategoryScreen::new(data.categories, data.networks.into_owned()),
                 signal_task_send: None,
                 sync_interval: data.sync_interval,
                 now: Instant::now(),
@@ -129,6 +129,7 @@ impl App {
             theme: self.sett_scr.theme_selected.clone(),
             send_timeout: 90,
             categories: self.category_scr.categories.clone(),
+            networks: Cow::Borrowed(&self.category_scr.networks)
         };
         data.save()
     }
@@ -144,7 +145,7 @@ impl App {
         match message {
             Message::MainScrMessage(m) => self.main_scr.update(m, now),
             Message::SettingsScrMessage(m) => self.sett_scr.update(m),
-            Message::CategoriesScrMessage(m) => self.category_scr.update(m),
+            Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.main_scr.groups),
             Message::SignalMessage(m) => {
                 if let Some(channel) = self.signal_task_send.as_ref() {
                     let mut channel = channel.clone();
@@ -329,7 +330,7 @@ impl App {
             match self.cur_screen {
                 Screen::Main => self.main_scr.view().map(Into::into),
                 Screen::Settings => self.sett_scr.view().map(Into::into),
-                Screen::Categories => self.category_scr.view().map(Into::into)
+                Screen::Categories => self.category_scr.view(self.main_scr.groups()).map(Into::into)
             }
         )
         .push(
@@ -384,6 +385,7 @@ pub struct AppData<'a> {
     pub whatsapp_logged: bool,
     pub theme: Theme,
     pub categories: Vec<SendCategory>,
+    pub networks: Cow<'a, NetworksPool>,
 }
 
 impl Default for AppData<'_> {
@@ -401,6 +403,7 @@ impl Default for AppData<'_> {
             whatsapp_logged: false,
             theme: Theme::None,
             categories: Vec::new(),
+            networks: Cow::Owned(HashMap::new()),
         }
     }
 }

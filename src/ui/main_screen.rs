@@ -35,6 +35,7 @@ pub enum Message {
     ShowSignalGroups(bool),
     ShowWhatsappGroups(bool),
     NextMessage,
+    Categories,
 }
 
 impl From<Message> for MainMessage {
@@ -99,6 +100,9 @@ impl MainScreen {
         self.now = now;
 
         match message {
+            Message::Categories => {
+                return Task::done(MainMessage::SetScreen(super::Screen::Categories))
+            },
             Message::SetRegisterUrl(url) => {
                 let url = url.as_ref();
                 self.register_url = Some(
@@ -608,8 +612,9 @@ impl MainScreen {
             .push_maybe(
                 (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked).then(||
                     button(
-                        text("Оновити групи").width(Length::Fill).center()).on_press(Message::UpdateGroups
+                        text("Оновити групи").width(Length::Fill).center()
                     )
+                    .on_press(Message::UpdateGroups)
                     .style(
                         |theme: &iced::Theme, status| {
                             let palette = theme.extended_palette();
@@ -626,6 +631,14 @@ impl MainScreen {
                         }
                     )
                 )
+            )
+            .push(
+                button(
+                    text("Категорії надсилання")
+                    .width(Length::Fill)
+                    .center()
+                )
+                .on_press(Message::Categories)
             )
             .push(
                 self.group_list()
