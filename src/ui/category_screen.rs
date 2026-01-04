@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use iced::{Alignment, Font, Length, Pixels};
+use iced::{Alignment, Color, Font, Length, Pixels};
 use iced::{Element, Task};
 use iced::widget::{Column, Row, button, checkbox, scrollable, space, text, text_input};
 
@@ -93,7 +93,6 @@ impl CategoryScreen {
 
     fn category_list(&self) -> Element<'_, Message> {
         let col = Column::new()
-        .width(Length::Fill)
         .spacing(5)
         .push(
             button(
@@ -150,6 +149,7 @@ impl CategoryScreen {
                     col.push(
                         button(
                             text(category.name())
+                            .width(Length::Fill)
                             .center()
                         )
                         .style(
@@ -166,7 +166,7 @@ impl CategoryScreen {
                 }
             )
         )
-        .width(Length::FillPortion(1))
+        .width(Length::Fill)
         .height(Length::Fill)
         .into()
     }
@@ -234,9 +234,9 @@ impl CategoryScreen {
                     ))
                 })
             )
-            .width(Length::FillPortion(4))
-            .height(Length::Fill)
         )
+        .width(Length::FillPortion(4))
+        .height(Length::Fill)
         .into()
     }
 
@@ -245,7 +245,6 @@ impl CategoryScreen {
         scrollable(
             Column::new()
             .spacing(7)
-            .align_x(Alignment::Center)
             .push(
                 text("Signal").width(Length::Fill).center()
             )
@@ -303,7 +302,7 @@ impl CategoryScreen {
                 ))
             })
         )
-        .width(Length::FillPortion(2))
+        .width(Length::Fill)
         .height(Length::Fill)
         .into()
     }
@@ -325,7 +324,7 @@ impl CategoryScreen {
                 )
             )
         )
-        .width(Length::FillPortion(2))
+        .width(Length::Fill)
         .height(Length::Fill)
         .into()
     }
@@ -334,16 +333,33 @@ impl CategoryScreen {
         let mut main_row = Row::new()
         .padding(10)
         .spacing(10)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .push(
             self.category_list()
         );
 
         if let Some(index) = self.selected_category {
             main_row = main_row.push(
-                self.category_groups(index, groups)
-            )
-            .push(
-                self.category_networks(index)
+                Column::new()
+                .width(Length::FillPortion(4))
+                .spacing(20)
+                .push(
+                    text(self.categories[index].name())
+                    .width(Length::Fill)
+                    .size(24)
+                    .center()
+                )
+                .push(
+                    Row::new()
+                    .width(Length::Fill)
+                    .push(
+                        self.category_groups(index, groups)
+                    )
+                    .push(
+                        self.category_networks(index)
+                    )
+                )
             )
         }
         else {
