@@ -15,10 +15,22 @@ pub fn parse_networks_data(s: &str) -> serde_json::Result<HashMap<u64, NetworkIn
 
 #[derive(Debug, Clone, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NetworkInfo {
-    id: u64,
-    freq: String,
-    crypt_mode: String,
-    name: String,
+    pub id: u64,
+    pub freq: String,
+    pub crypt_mode: String,
+    pub name: String,
+}
+
+
+impl NetworkInfo {
+    pub fn new(id: u64, name: String) -> Self {
+        Self {
+            id, 
+            name,
+            crypt_mode: String::new(),
+            freq: String::new(),
+        }
+    }
 }
 
 impl From<FullNetworkInfo> for NetworkInfo {

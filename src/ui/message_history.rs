@@ -41,7 +41,6 @@ impl From<u8> for SendStatus {
 #[derive(Debug)]
 pub struct GroupInfoSignal {
     pub key: [u8; 32],
-    pub title: String,
     pub(super) timestamp: AtomicU64,
     pub send_mode: SendMode,
 }
@@ -50,7 +49,6 @@ impl Clone for GroupInfoSignal {
     fn clone(&self) -> Self {
         Self {
             key: self.key,
-            title: self.title.clone(),
             timestamp: AtomicU64::new(self.timestamp.load(Ordering::Relaxed)),
             send_mode: self.send_mode,
         }
@@ -58,8 +56,8 @@ impl Clone for GroupInfoSignal {
 }
 
 impl GroupInfoSignal {
-    pub fn new(key: [u8; 32], title: String, send_mode: SendMode) -> Self {
-        Self { key, title, timestamp: AtomicU64::new(0), send_mode }
+    pub fn new(key: [u8; 32], send_mode: SendMode) -> Self {
+        Self { key, timestamp: AtomicU64::new(0), send_mode }
     }
 
     pub fn set_timestamp(&self, timestamp: u64, ordering: std::sync::atomic::Ordering) {
@@ -84,7 +82,6 @@ impl GroupInfoSignal {
 #[derive(Debug)]
 pub struct GroupInfoWhatsapp {
     pub key: Jid,
-    pub title: String,
     sent: AtomicBool,
     pub(super) sent_id: Mutex<String>,
     pub send_mode: SendMode,
@@ -94,7 +91,6 @@ impl Clone for GroupInfoWhatsapp {
     fn clone(&self) -> Self {
         Self {
             key: self.key.clone(),
-            title: self.title.clone(),
             sent: AtomicBool::new(self.sent.load(Ordering::Relaxed)),
             sent_id: Mutex::new(self.sent_id.lock().unwrap().clone()),
             send_mode: self.send_mode
@@ -103,10 +99,9 @@ impl Clone for GroupInfoWhatsapp {
 }
 
 impl GroupInfoWhatsapp {
-    pub fn new(key: Jid, title: String, send_mode: SendMode) -> Self {
+    pub fn new(key: Jid, send_mode: SendMode) -> Self {
         Self {
             key,
-            title,
             sent: AtomicBool::new(false),
             sent_id: Mutex::new(String::new()),
             send_mode
@@ -149,10 +144,10 @@ impl SendMessageInfo {
         }
     }
 
-    pub fn push(&mut self, group_key: Key, title: String, send_mode: SendMode) {
+    pub fn push(&mut self, group_key: Key, send_mode: SendMode) {
         match group_key {
-            Key::Signal(key) => self.groups_signal.push(GroupInfoSignal::new(key, title, send_mode)),
-            Key::Whatsapp(key) => self.groups_whatsapp.push(GroupInfoWhatsapp::new(key, title, send_mode)),
+            Key::Signal(key) => self.groups_signal.push(GroupInfoSignal::new(key, send_mode)),
+            Key::Whatsapp(key) => self.groups_whatsapp.push(GroupInfoWhatsapp::new(key, send_mode)),
         }
     }
 

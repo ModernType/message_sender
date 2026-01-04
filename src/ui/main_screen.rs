@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, ui::message_history::SendMessageInfo};
+use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, send_categories::{NetworkInfo, SendCategory}, ui::message_history::SendMessageInfo};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -17,7 +17,7 @@ pub enum Message {
     SetWhatsappState(LinkState),
     SetAutoSend(bool),
     TextEdit(text_editor::Action),
-    SendMessage(String, Option<String>),
+    SendMessage(String, Option<String>, Option<String>),
     SendMessagePressed,
     LinkBegin,
     WhatsappLink,
@@ -96,7 +96,7 @@ impl MainScreen {
         &self.groups
     }
 
-    pub fn update(&mut self, message: Message, now: Instant) -> Task<MainMessage> {
+    pub fn update(&mut self, message: Message, now: Instant, categories: &Vec<SendCategory>) -> Task<MainMessage> {
         self.now = now;
 
         match message {
@@ -138,29 +138,57 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
-                let (text, freq) = if let Some(mut message) = self.cur_message.take() {
+                let (text, freq, network) = if let Some(mut message) = self.cur_message.take() {
                     message.text = self.message_content.text();
-                    (message.text, message.freq)
+                    (message.text, message.freq, message.network)
                 }
                 else {
-                    (self.message_content.text(), None)
+                    (self.message_content.text(), None, None)
                 };
 
                 self.message_content = text_editor::Content::new();
 
                 return Task::batch([
                     Task::done(Message::NextMessage.into()),
-                    Task::done(Message::SendMessage(text, freq).into()),
+                    Task::done(Message::SendMessage(text, freq, network).into()),
                 ])
             }
-            Message::SendMessage(message, freq) => {
+            Message::SendMessage(message, freq, network) => {
                 let mut message = SendMessageInfo::new(message, freq);
-                
-                for (key, group) in self.groups.iter() {
-                    if group.active() {
-                        message.push(key.clone(), group.title.clone(), group.send_mode);
+
+
+                if let Some(network) = network {
+                    log::info!("Has network {}", &network);
+                    let mut groups = HashMap::new();
+                    for category in categories {
+                        if category.match_network_by_name(&network) {
+                            groups.extend(category.groups.iter());
+                        }
+                    }
+                    if !groups.is_empty() {
+                        log::info!("Has in cateegory");
+                        for(key, mode) in groups {
+                            message.push(key.clone(), *mode);
+                        }
+                    }
+                    else {
+                        log::info!("Getting general");
+                        for (key, group) in self.groups.iter() {
+                            if group.active() {
+                                message.push(key.clone(), group.send_mode);
+                            }
+                        }
                     }
                 }
+                else {
+                    log::info!("Getting general");
+                    for (key, group) in self.groups.iter() {
+                        if group.active() {
+                            message.push(key.clone(), group.send_mode);
+                        }
+                    }
+                }
+                
                 let message = Arc::new(message);
 
                 if self.message_history.len() >= self.history_limit as usize {
@@ -172,7 +200,7 @@ impl MainScreen {
                     Task::done(MainMessage::Notification("Початок відправки повідомлення".to_owned())),
                     Task::done(MainMessage::SendMessage(
                         message
-                    ).into()),
+                    )),
                 ])
             },
             Message::LinkBegin => {

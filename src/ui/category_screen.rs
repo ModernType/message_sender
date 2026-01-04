@@ -318,7 +318,7 @@ impl CategoryScreen {
                 Column::new()
                 .spacing(7),
                 |col, name| col.push(
-                    checkbox(*category.networks.get(name).unwrap())
+                    checkbox(category.networks.get(name).cloned().unwrap_or_default())
                     .label(name)
                     .on_toggle(move |state| Message::ToggleNetwork(index, name.clone(), state))
                 )

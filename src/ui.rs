@@ -7,7 +7,7 @@ use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription,
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
+use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::{Group, LinkState}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -143,7 +143,7 @@ impl App {
         self.now = now;
 
         match message {
-            Message::MainScrMessage(m) => self.main_scr.update(m, now),
+            Message::MainScrMessage(m) => self.main_scr.update(m, now, &self.category_scr.categories),
             Message::SettingsScrMessage(m) => self.sett_scr.update(m),
             Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.main_scr.groups),
             Message::SignalMessage(m) => {
@@ -259,12 +259,17 @@ impl App {
             },
             Message::AcceptMessage(messages) => {
                 let autosend = messages.iter().fold(self.main_scr.autosend(), |autosend, msg| autosend && !msg.autosend_overwrite);
-                
+                for msg in messages.iter() {
+                    if let Some(network) = &msg.network && !self.category_scr.networks.contains_key(network) {
+                        self.category_scr.networks.insert(network.clone(), NetworkInfo::new(0, network.clone()));
+                    }
+                }
+
                 if autosend {
                     Task::batch(
                         messages
                         .into_iter()
-                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.text, msg.freq).into()))
+                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.text, msg.freq, msg.network).into()))
                     )
                 }
                 else {
