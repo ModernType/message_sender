@@ -5,7 +5,7 @@ use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use log::info;
 use tokio::net::TcpListener;
 
-use crate::{message::OperatorMessage, ui};
+use crate::{message::OperatorMessage, send_categories::parse_networks_data, ui};
 
 pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<()> {
     info!("Binding on addr {}", &addr);
@@ -22,7 +22,10 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
         }
     };
 
-    let router = Router::new().route("/", post(move |s: String| async move {
+    let mut msg_send_channel2 = msg_send_channel.clone();
+    let router = Router::new()
+    .route("/", post(move |s: String| async move {
+        log::info!("Got messages on server");
         let message = match serde_json::from_str::<Vec<OperatorMessage>>(&s) {
             Ok(msgs) => msgs.into_iter().map(AcceptedMessage::from).collect::<Vec<_>>(),
             Err(e) => {
@@ -33,9 +36,22 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
             }
         };
 
-        log::info!("Accepted messages: {:#?}", message);
-
         msg_send_channel.send(ui::Message::AcceptMessage(message)).await.unwrap();
+
+        (StatusCode::OK, "Recieved".to_owned())
+    }))
+    .route("/networks", post(move |s: String| async move {
+        log::info!("Got networks on server");
+        let networks = match parse_networks_data(&s) {
+            Ok(networks) => networks,
+            Err(e) => {
+                log::error!("Error parsing networks: {}", &e);
+                msg_send_channel2.send(ui::Message::Notification(format!("Error parsing networks: {}", &e))).await.unwrap();
+                return (StatusCode::BAD_REQUEST, "Invalid data".to_owned())
+            }
+        };
+
+        msg_send_channel2.send(ui::Message::RecivedNetworks(networks)).await.unwrap();
 
         (StatusCode::OK, "Recieved".to_owned())
     }));
