@@ -3,7 +3,7 @@ use std::net::SocketAddrV4;
 use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, rich_text, scrollable, span, svg, text, text_input}};
 use rfd::FileHandle;
 
-use crate::{send_categories::parse_networks_data, ui::{AppData, main_screen, theme::Theme}};
+use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, main_screen, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -171,10 +171,18 @@ impl SettingsScreen {
                     .label("Використовувати форматування markdown при відправці повідомлень")
                     .on_toggle(Message::ToggleMarkdown)
                 )
-                .push(
-                    checkbox(data.parallel)
-                    .label("Здійснювати відправку повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
-                    .on_toggle(Message::ToggleParallel)
+                .push_maybe(
+                    {
+                        #[cfg(debug_assertions)]
+                        let comp_val = true;
+                        #[cfg(not(debug_assertions))]
+                        let comp_val = false;
+                        comp_val.then(||
+                            checkbox(data.parallel)
+                            .label("Здійснювати відправку повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
+                            .on_toggle(Message::ToggleParallel)
+                        )
+                    }
                 )
                 .push(
                     Row::new()
