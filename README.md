@@ -8,8 +8,8 @@
 - [x] Rich text support (Markdown)
 - [x] Sent messages history
 - [x] WhatsApp
+- [x] Send categories
 - [ ] Send to contacts
-- [ ] Send categories
 - [ ] File sending
 
 ## Installing
@@ -24,7 +24,7 @@ Clone the project using `git`:
 
 Then in the project folder build it with `cargo`:
 
-```cargo build --release```
+```cargo release```
 
 Executable will be located in: `{project_folder}/target/release/modern-sender`
 
