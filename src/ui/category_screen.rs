@@ -15,6 +15,7 @@ use crate::ui::main_screen::Group;
 pub struct CategoryScreen {
     pub new_category_name: Option<String>,
     pub selected_category: Option<usize>,
+    edit_new_name_id: iced::widget::Id,
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +41,7 @@ impl CategoryScreen {
         Self {
             new_category_name: None,
             selected_category: None,
+            edit_new_name_id: iced::widget::Id::unique()
         }
     }
 
@@ -48,7 +50,10 @@ impl CategoryScreen {
             Message::AddCategory => {
                 match self.new_category_name.take() {
                     Some(name) if !name.is_empty() => data.categories.push(SendCategory::new(name)),
-                    None => self.new_category_name = Some(String::new()),
+                    None => {
+                        self.new_category_name = Some(String::new());
+                        return iced::widget::operation::focus(self.edit_new_name_id.clone())
+                    },
                     _ => {}
                 }
             },
@@ -119,6 +124,7 @@ impl CategoryScreen {
                 |name| text_input("Назва категорії", name)
                 .on_input(Message::EditNewName)
                 .on_submit(Message::AddCategory)
+                .id(self.edit_new_name_id.clone())
             )
         )
         .push(
