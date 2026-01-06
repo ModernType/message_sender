@@ -344,7 +344,7 @@ impl App {
         Subscription::batch([
             iced::system::theme_changes().map(|mode| Message::ThemeChange(mode.into())),
             Subscription::run(Self::setup_subscription),
-            // iced::time::every(std::time::Duration::from_secs(self.sync_interval)).map(|_| Message::UpdateGroupList),
+            if self.data.autoupdate_groups { iced::time::every(std::time::Duration::from_secs(10)).map(|_| Message::UpdateGroupList) } else { Subscription::none() },
             iced::window::close_requests().map(|_| Message::OnClose),
             if self.is_animating() { iced::window::frames().map(|_| Message::None) } else { Subscription::none() },
         ])
@@ -388,6 +388,7 @@ pub struct AppData {
     pub categories: Vec<SendCategory>,
     pub networks: NetworksPool,
     pub show_groups: bool,
+    pub autoupdate_groups: bool,
 }
 
 impl Default for AppData {
@@ -407,6 +408,7 @@ impl Default for AppData {
             categories: Vec::new(),
             networks: HashMap::new(),
             show_groups: true,
+            autoupdate_groups: true,
         }
     }
 }

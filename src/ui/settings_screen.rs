@@ -13,6 +13,7 @@ pub enum Message {
     ToggleMarkdown(bool),
     ToggleParallel(bool),
     ToggleShowGroups(bool),
+    ToggleAutoupdateGroups(bool),
     RecieveAddressEditChanged(String),
     HistoryLenEdit(String),
     ThemeSelected(Theme),
@@ -51,6 +52,9 @@ impl SettingsScreen {
             },
             Message::ToggleShowGroups(state) => {
                 data.show_groups = state;
+            },
+            Message::ToggleAutoupdateGroups(state) => {
+                data.autoupdate_groups = state;
             },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
                 match recieve_address_edit.parse() {
@@ -155,6 +159,11 @@ impl SettingsScreen {
                 .push(
                     checkbox(data.show_groups)
                     .label("Показувати список груп на головному екрані")
+                    .on_toggle(Message::ToggleShowGroups)
+                )
+                .push(
+                    checkbox(data.autoupdate_groups)
+                    .label("Автоматично оновлювати список груп з месенджерів")
                     .on_toggle(Message::ToggleShowGroups)
                 )
                 .push(

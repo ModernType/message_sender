@@ -625,7 +625,11 @@ impl MainScreen {
                 )
             )
             .push_maybe(
-                (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked).then(||
+                (
+                    (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
+                    && !data.autoupdate_groups
+                )
+                .then(||
                     button(
                         text("Оновити групи").width(Length::Fill).center()
                     )
