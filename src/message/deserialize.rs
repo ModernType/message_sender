@@ -39,7 +39,7 @@ pub struct MessageInner<'a> {
     pub title: &'a str,
     #[serde(rename = "source")]
     pub _source: &'a str,
-    #[serde(rename = "networkID")]
+    #[serde(rename = "radionetworkID")]
     pub network_id: Option<u64>,
 }
 
