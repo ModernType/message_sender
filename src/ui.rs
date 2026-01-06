@@ -401,7 +401,7 @@ impl Default for AppData {
             send_timeout: 90,
             markdown: true,
             parallel: false,
-            history_len: 20,
+            history_len: 50,
             signal_logged: false,
             whatsapp_logged: false,
             theme: Theme::None,
