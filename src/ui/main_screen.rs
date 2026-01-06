@@ -17,7 +17,7 @@ pub enum Message {
     SetWhatsappState(LinkState),
     SetAutoSend(bool),
     TextEdit(text_editor::Action),
-    SendMessage(String, Option<String>, Option<String>),
+    SendMessage(String, Option<String>, Option<u64>),
     SendMessagePressed,
     LinkBegin,
     WhatsappLink,
@@ -161,7 +161,7 @@ impl MainScreen {
                     log::info!("Has network {}", &network);
                     let mut groups = HashMap::new();
                     for category in categories {
-                        if category.match_network_by_name(&network) {
+                        if category.contains_network(&network) {
                             groups.extend(category.groups.iter());
                         }
                     }

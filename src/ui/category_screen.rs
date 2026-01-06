@@ -26,7 +26,7 @@ pub enum Message {
     CategoryToggled(usize),
     ShowGeneral,
     ToggleGroup(usize, Key, SendMode),
-    ToggleNetwork(usize, String, bool),
+    ToggleNetwork(usize, u64, bool),
     ToggleGeneralGroup(Key, SendMode),
     Back
 }
@@ -82,10 +82,10 @@ impl CategoryScreen {
             Message::ToggleNetwork(index, network, state) => {
                 let category = &mut self.categories[index];
                 if state {
-                    category.networks.insert(network);
+                    category.networks.push(network);
                 }
                 else {
-                    category.networks.remove(&network);
+                    category.networks.retain(|v| *v != network);
                 }
             },
             Message::Back => {
@@ -323,10 +323,10 @@ impl CategoryScreen {
             .fold(
                 Column::new()
                 .spacing(7),
-                |col, name| col.push(
-                    checkbox(category.networks.contains(name))
-                    .label(name)
-                    .on_toggle(move |state| Message::ToggleNetwork(index, name.clone(), state))
+                |col, id| col.push(
+                    checkbox(category.networks.contains(id))
+                    .label(&self.networks.get(id).unwrap().name)
+                    .on_toggle(move |state| Message::ToggleNetwork(index, *id, state))
                 )
             )
         )

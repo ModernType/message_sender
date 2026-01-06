@@ -39,6 +39,8 @@ pub struct MessageInner<'a> {
     pub title: &'a str,
     #[serde(rename = "source")]
     pub _source: &'a str,
+    #[serde(rename = "networkID")]
+    pub network_id: Option<u64>,
 }
 
 impl<'a> Message<'a> {

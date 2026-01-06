@@ -33,6 +33,8 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
             }
         };
 
+        log::info!("Accepted messages: {:#?}", message);
+
         msg_send_channel.send(ui::Message::AcceptMessage(message)).await.unwrap();
 
         (StatusCode::OK, "Recieved".to_owned())
@@ -47,19 +49,18 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
 pub struct AcceptedMessage {
     pub text: String,
     pub freq: Option<String>,
-    pub network: Option<String>,
+    pub network: Option<u64>,
     pub autosend_overwrite: bool,
 }
 
 impl From<OperatorMessage<'_>> for AcceptedMessage {
     fn from(value: OperatorMessage) -> Self {
         let freq = Some(value.0.frequency.to_string());
-        let network = Some(value.0.title.to_string());
 
         Self {
             text: value.to_string(),
             freq,
-            network,
+            network: value.0.network_id,
             autosend_overwrite: false
         }
     }

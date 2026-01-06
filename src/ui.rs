@@ -261,11 +261,6 @@ impl App {
             },
             Message::AcceptMessage(messages) => {
                 let autosend = messages.iter().fold(self.main_scr.autosend(), |autosend, msg| autosend && !msg.autosend_overwrite);
-                for msg in messages.iter() {
-                    if let Some(network) = &msg.network && !self.category_scr.networks.contains_key(network) {
-                        self.category_scr.networks.insert(network.clone(), NetworkInfo::new(0, network.clone()));
-                    }
-                }
 
                 if autosend {
                     Task::batch(
@@ -326,11 +321,7 @@ impl App {
                 }
             },
             Message::RecivedNetworks(networks) => {
-                let networks = networks.values()
-                .map(|val| (val.name.clone(), val.clone()))
-                .collect::<HashMap<_, _>>();
-
-                self.category_scr.networks = networks;
+                self.category_scr.networks.extend(networks);
                 Task::done(Message::Notification("Нові мережі додані!".to_owned()))
             },
             Message::None => Task::done(main_screen::Message::UpdateMessageHistory.into()),

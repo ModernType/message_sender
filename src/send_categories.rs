@@ -1,17 +1,17 @@
 mod deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub use deserialize::{NetworkInfo, parse_networks_data};
 use serde::{Deserialize, Serialize};
 
 use crate::{message::SendMode, messangers::Key};
 
-pub type NetworksPool = HashMap<String, NetworkInfo>;
+pub type NetworksPool = HashMap<u64, NetworkInfo>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendCategory {
     name: String,
-    pub networks: HashSet<String>,
+    pub networks: Vec<u64>,
     pub groups: HashMap<Key, SendMode>,
 }
 
@@ -19,17 +19,17 @@ impl SendCategory {
     pub fn new(name: String) -> Self {
         Self {
             name,
-            networks: HashSet::new(),
+            networks: Vec::new(),
             groups: HashMap::new(),
         }
     }
 
-    pub fn match_network_by_name(&self, name: &String) -> bool {
-        self.networks.contains(name)
-    }
-
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn contains_network(&self, id: &u64) -> bool {
+        self.networks.contains(id)
     }
 
     pub fn shrink(&mut self) {
