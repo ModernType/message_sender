@@ -47,6 +47,7 @@ pub enum Message {
     Synced,
     Notification(String),
     NotificationClose,
+    RecivedNetworks(HashMap<u64, NetworkInfo>),
     None,
 }
 
@@ -323,6 +324,14 @@ impl App {
                         Task::none()
                     },
                 }
+            },
+            Message::RecivedNetworks(networks) => {
+                let networks = networks.values()
+                .map(|val| (val.name.clone(), val.clone()))
+                .collect::<HashMap<_, _>>();
+
+                self.category_scr.networks = networks;
+                Task::done(Message::Notification("Нові мережі додані!".to_owned()))
             },
             Message::None => Task::done(main_screen::Message::UpdateMessageHistory.into()),
         }

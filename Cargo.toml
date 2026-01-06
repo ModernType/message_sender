@@ -28,6 +28,7 @@ whatsapp-rust-tokio-transport = {git = "https://github.com/jlucaso1/whatsapp-rus
 whatsapp-rust-ureq-http-client = {git = "https://github.com/jlucaso1/whatsapp-rust.git"}
 waproto = {git = "https://github.com/jlucaso1/whatsapp-rust.git"}
 wacore-binary = {git = "https://github.com/jlucaso1/whatsapp-rust.git"}
+rfd = "0.17.1"
 
 [dependencies.iced]
 version = "0.14"

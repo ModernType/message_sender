@@ -1,8 +1,9 @@
 use std::net::SocketAddrV4;
 
 use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, rich_text, scrollable, span, svg, text, text_input}};
+use rfd::FileHandle;
 
-use crate::ui::{main_screen, theme::Theme};
+use crate::{send_categories::parse_networks_data, ui::{main_screen, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -14,6 +15,8 @@ pub enum Message {
     RecieveAddressEditChanged(String),
     HistoryLenEdit(String),
     ThemeSelected(Theme),
+    ChooseNetworkFile,
+    NetworkFileChoosen(Option<FileHandle>),
 }
 
 impl From<Message> for MainMessage {
@@ -74,7 +77,36 @@ impl SettingsScreen {
             Message::ThemeSelected(theme) => {
                 self.theme_selected = theme.clone();
                 return Task::done(MainMessage::ThemeChange(theme));
-            }
+            },
+            Message::ChooseNetworkFile => {
+                return Task::perform(
+                    rfd::AsyncFileDialog::new()
+                    .add_filter("Файл мереж", &["json"])
+                    .set_title("Виберіть файл з даними мереж")
+                    .set_directory(std::path::absolute(".").unwrap())
+                    .pick_file(),
+                    Message::NetworkFileChoosen
+                )
+                .map(Into::into)
+            },
+            Message::NetworkFileChoosen(path) => {
+                if let Some(path) = path {
+                    return Task::future(async move {
+                        let res: anyhow::Result<_> = async move {
+                            let s = tokio::fs::read_to_string(path.path()).await?;
+                            Ok(parse_networks_data(&s)?)
+                        }.await;
+                        match res {
+                            Ok(networks) => MainMessage::RecivedNetworks(networks),
+                            Err(e) => {
+                                log::error!("Error parsing networks: {}", &e);
+                                MainMessage::Notification(format!("Помилка зчитування мереж: {e}"))
+                            }
+                        }
+                    })
+                }
+            },
+            
         }
 
         Task::none()
@@ -151,6 +183,10 @@ impl SettingsScreen {
                             Message::ThemeSelected
                         )
                     )
+                )
+                .push(
+                    button("Завантажити список мереж")
+                    .on_press(Message::ChooseNetworkFile)
                 )
             )
             .width(Length::Fill)
