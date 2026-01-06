@@ -164,7 +164,7 @@ impl SettingsScreen {
                 .push(
                     checkbox(data.autoupdate_groups)
                     .label("Автоматично оновлювати список груп з месенджерів")
-                    .on_toggle(Message::ToggleShowGroups)
+                    .on_toggle(Message::ToggleAutoupdateGroups)
                 )
                 .push(
                     checkbox(data.markdown)
