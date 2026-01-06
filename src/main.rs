@@ -16,17 +16,19 @@ mod test;
 
 fn main() {
     let log_file = File::create("sender.log").unwrap();
+    #[cfg(debug_assertions)]
+    let log_filter = log::LevelFilter::Info;
+    #[cfg(not(debug_assertions))]
+    let log_filter = log::LevelFilter::Warn;
+
     simplelog::CombinedLogger::init(vec![
         simplelog::TermLogger::new(
-            #[cfg(debug_assertions)]
-            log::LevelFilter::Info,
-            #[cfg(not(debug_assertions))]
-            log::LevelFilter::Warn,
+            log_filter,
             Config::default(),
             simplelog::TerminalMode::Mixed,
             simplelog::ColorChoice::Auto,
         ),
-        simplelog::WriteLogger::new(log::LevelFilter::Info, Config::default(), log_file),
+        simplelog::WriteLogger::new(log_filter, Config::default(), log_file),
     ])
     .unwrap();
 
