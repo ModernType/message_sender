@@ -387,6 +387,7 @@ pub struct AppData {
     pub theme: Theme,
     pub categories: Vec<SendCategory>,
     pub networks: NetworksPool,
+    pub show_groups: bool,
 }
 
 impl Default for AppData {
@@ -405,6 +406,7 @@ impl Default for AppData {
             theme: Theme::None,
             categories: Vec::new(),
             networks: HashMap::new(),
+            show_groups: true,
         }
     }
 }

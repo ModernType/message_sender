@@ -655,8 +655,8 @@ impl MainScreen {
                 )
                 .on_press(Message::Categories)
             )
-            .push(
-                self.group_list(&data.groups)
+            .push_maybe(
+                data.show_groups.then(|| self.group_list(&data.groups))
             )
         )
         .push(

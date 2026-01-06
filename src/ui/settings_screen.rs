@@ -12,6 +12,7 @@ pub enum Message {
     ToMainScreen,
     ToggleMarkdown(bool),
     ToggleParallel(bool),
+    ToggleShowGroups(bool),
     RecieveAddressEditChanged(String),
     HistoryLenEdit(String),
     ThemeSelected(Theme),
@@ -47,6 +48,9 @@ impl SettingsScreen {
             },
             Message::ToggleParallel(parallel) => {
                 data.parallel = parallel;
+            },
+            Message::ToggleShowGroups(state) => {
+                data.show_groups = state;
             },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
                 match recieve_address_edit.parse() {
@@ -147,6 +151,11 @@ impl SettingsScreen {
                         text_input("Кількість повідомлень в історії", &data.history_len.to_string())
                         .on_input(Message::HistoryLenEdit)
                     ]
+                )
+                .push(
+                    checkbox(data.show_groups)
+                    .label("Показувати список груп на головному екрані")
+                    .on_toggle(Message::ToggleShowGroups)
                 )
                 .push(
                     checkbox(data.markdown)
