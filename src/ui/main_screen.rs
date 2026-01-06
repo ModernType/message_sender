@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, send_categories::{NetworkInfo, SendCategory}, ui::message_history::SendMessageInfo};
+use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, send_categories::{NetworkInfo, SendCategory}, ui::{AppData, main_screen, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -50,12 +50,9 @@ pub(super) struct MainScreen {
     whatsapp_url: Option<qr_code::Data>,
     pub signal_state: LinkState,
     pub whatsapp_state: LinkState,
-    autosend: bool,
     message_content: text_editor::Content,
-    pub groups: HashMap<Key, Group>,
     pub message_history: VecDeque<Arc<SendMessageInfo>>,
     pub show_message_history: Animation<bool>,
-    history_limit: u32,
     edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
     show_signal_groups: bool,
@@ -65,11 +62,8 @@ pub(super) struct MainScreen {
 }
 
 impl MainScreen {
-    pub fn new(autosend: bool, groups: HashMap<Key, Group>, history_limit: u32) -> Self {
+    pub fn new() -> Self {
         Self {
-            autosend,
-            groups,
-            history_limit,
             register_url: None,
             whatsapp_url: None,
             signal_state: Default::default(),
@@ -88,15 +82,7 @@ impl MainScreen {
         }
     }
 
-    pub fn autosend(&self) -> bool {
-        self.autosend
-    }
-
-    pub fn groups(&self) -> &HashMap<Key, Group> {
-        &self.groups
-    }
-
-    pub fn update(&mut self, message: Message, now: Instant, categories: &Vec<SendCategory>) -> Task<MainMessage> {
+    pub fn update(&mut self, message: Message, now: Instant, data: &mut AppData) -> Task<MainMessage> {
         self.now = now;
 
         match message {
@@ -129,10 +115,10 @@ impl MainScreen {
                 }
             },
             Message::SetAutoSend(autosend) => {
-                self.autosend = autosend;
+                data.autosend = autosend;
             },
             Message::SetHistoryLimit(limit) => {
-                self.history_limit = limit;
+                data.history_len = limit;
             },
             Message::TextEdit(action) => {
                 self.message_content.perform(action);
@@ -160,7 +146,7 @@ impl MainScreen {
                 if let Some(network) = network {
                     log::info!("Has network {}", &network);
                     let mut groups = HashMap::new();
-                    for category in categories {
+                    for category in data.categories.iter() {
                         if category.contains_network(&network) {
                             groups.extend(category.groups.iter());
                         }
@@ -173,7 +159,7 @@ impl MainScreen {
                     }
                     else {
                         log::info!("Getting general");
-                        for (key, group) in self.groups.iter() {
+                        for (key, group) in data.groups.iter() {
                             if group.active() {
                                 message.push(key.clone(), group.send_mode);
                             }
@@ -182,7 +168,7 @@ impl MainScreen {
                 }
                 else {
                     log::info!("Getting general");
-                    for (key, group) in self.groups.iter() {
+                    for (key, group) in data.groups.iter() {
                         if group.active() {
                             message.push(key.clone(), group.send_mode);
                         }
@@ -191,7 +177,7 @@ impl MainScreen {
                 
                 let message = Arc::new(message);
 
-                if self.message_history.len() >= self.history_limit as usize {
+                if self.message_history.len() >= data.history_len as usize {
                     self.message_history.pop_back();
                 }
                 self.message_history.push_front(message.clone());
@@ -212,11 +198,11 @@ impl MainScreen {
                 return Task::perform(whatsapp::start_whatsapp_task(), |_| MainMessage::None);
             },
             Message::ToggleGroup(key, send_mode) => {
-                self.groups.get_mut(&key).unwrap().send_mode = send_mode;
+                data.groups.get_mut(&key).unwrap().send_mode = send_mode;
             },
             Message::SetGroups(groups) => {
                 for (key, title) in groups {
-                    self.groups.entry(key)
+                    data.groups.entry(key)
                     .or_insert(Group { title, send_mode: SendMode::Off });
                 }
             },
@@ -255,7 +241,7 @@ impl MainScreen {
             },
             Message::CancelEdit => {
                 self.message_content = text_editor::Content::new();
-                if self.message_history.len() >= self.history_limit as usize {
+                if self.message_history.len() >= data.history_len as usize {
                     self.message_history.pop_back();
                 }
                 self.message_history.push_front(
@@ -280,7 +266,7 @@ impl MainScreen {
                 message.content = new_message;
                 message.set_status(super::message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
 
-                if self.message_history.len() >= self.history_limit as usize {
+                if self.message_history.len() >= data.history_len as usize {
                     self.message_history.pop_back();
                 }
                 self.message_history.push_front(arc_message.clone());
@@ -307,7 +293,7 @@ impl MainScreen {
         Task::none()
     }
 
-    fn group_list(&self) -> Element<'_, Message> {
+    fn group_list<'a>(&'a self, groups: &'a HashMap<Key, main_screen::Group>) -> Element<'a, Message> {
         scrollable(
             Column::new()
             .spacing(3)
@@ -328,7 +314,7 @@ impl MainScreen {
                 .interaction(Interaction::Pointer)
             )
             .push_maybe(self.show_signal_groups.then(|| {
-                let mut groups = self.groups.iter()
+                let mut groups = groups.iter()
                 .filter_map(|(key, group)| match key {
                     Key::Signal(key) => Some((key, group)),
                     _ => None
@@ -366,7 +352,7 @@ impl MainScreen {
                     .interaction(Interaction::Pointer)
             )
             .push_maybe(self.show_whatsapp_groups.then(|| {
-                let mut groups = self.groups.iter()
+                let mut groups = groups.iter()
                 .filter_map(|(key, group)| match key {
                     Key::Whatsapp(key) => Some((key, group)),
                     _ => None
@@ -452,7 +438,7 @@ impl MainScreen {
         )
     }
 
-    fn main_part(&self) -> Element<'_, Message> {
+    fn main_part(&self, autosend: bool) -> Element<'_, Message> {
         let col = Column::new()
         .width(Length::FillPortion(6))
         .height(Length::Fill)
@@ -559,14 +545,14 @@ impl MainScreen {
                 }
             )
             .push(
-                checkbox(self.autosend)
+                checkbox(autosend)
                 .label("Автоматична відправка")
                 .on_toggle(Message::SetAutoSend)
             ).into()
         }
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
         Row::new()
         .spacing(7)
         .push(
@@ -670,11 +656,11 @@ impl MainScreen {
                 .on_press(Message::Categories)
             )
             .push(
-                self.group_list()
+                self.group_list(&data.groups)
             )
         )
         .push(
-            self.main_part()
+            self.main_part(data.autosend)
         )
         .push(
             self.message_history()

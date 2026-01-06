@@ -7,14 +7,12 @@ use iced::widget::{Column, Row, button, checkbox, scrollable, space, text, text_
 use crate::message::SendMode;
 use crate::messangers::Key;
 use crate::send_categories::{NetworksPool, SendCategory};
-use crate::ui::Message as MainMessage;
+use crate::ui::{AppData, Message as MainMessage};
 use crate::ui::ext::PushMaybe;
 use crate::ui::main_screen::Group;
 
 
 pub struct CategoryScreen {
-    pub networks: NetworksPool,
-    pub categories: Vec<SendCategory>,
     pub new_category_name: Option<String>,
     pub selected_category: Option<usize>,
 }
@@ -38,20 +36,18 @@ impl From<Message> for MainMessage {
 }
 
 impl CategoryScreen {
-    pub fn new(categories: Vec<SendCategory>, networks: NetworksPool) -> Self {
+    pub fn new() -> Self {
         Self {
-            networks,
-            categories,
             new_category_name: None,
             selected_category: None,
         }
     }
 
-    pub fn update(&mut self, message: Message, general_groups: &mut HashMap<Key, Group>) -> Task<MainMessage> {
+    pub fn update(&mut self, message: Message, data: &mut AppData) -> Task<MainMessage> {
         match message {
             Message::AddCategory => {
                 match self.new_category_name.take() {
-                    Some(name) if !name.is_empty() => self.categories.push(SendCategory::new(name)),
+                    Some(name) if !name.is_empty() => data.categories.push(SendCategory::new(name)),
                     None => self.new_category_name = Some(String::new()),
                     _ => {}
                 }
@@ -73,14 +69,14 @@ impl CategoryScreen {
                 self.selected_category = None;
             },
             Message::ToggleGeneralGroup(key, send_mode) => {
-                general_groups.get_mut(&key).unwrap().send_mode = send_mode;
+                data.groups.get_mut(&key).unwrap().send_mode = send_mode;
             },
             Message::ToggleGroup(index, key, send_mode) => {
-                let category = &mut self.categories[index];
+                let category = &mut data.categories[index];
                 category.groups.insert(key, send_mode);
             },
             Message::ToggleNetwork(index, network, state) => {
-                let category = &mut self.categories[index];
+                let category = &mut data.categories[index];
                 if state {
                     category.networks.push(network);
                 }
@@ -89,7 +85,7 @@ impl CategoryScreen {
                 }
             },
             Message::Back => {
-                self.categories.iter_mut().for_each(SendCategory::shrink);
+                data.categories.iter_mut().for_each(SendCategory::shrink);
                 return Task::done(MainMessage::SetScreen(super::Screen::Main));
             }
         }
@@ -97,7 +93,7 @@ impl CategoryScreen {
         Task::none()
     }
 
-    fn category_list(&self) -> Element<'_, Message> {
+    fn category_list<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
         let col = Column::new()
         .spacing(5)
         .push(
@@ -147,7 +143,7 @@ impl CategoryScreen {
         );
 
         scrollable(
-            self.categories.iter()
+            data.categories.iter()
             .enumerate()
             .fold(
                 col,
@@ -246,8 +242,8 @@ impl CategoryScreen {
         .into()
     }
 
-    fn category_groups<'a>(&'a self, index: usize, groups: &'a HashMap<Key, Group>) -> Element<'a, Message> {
-        let category = &self.categories[index];
+    fn category_groups<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
+        let category = &data.categories[index];
         scrollable(
             Column::new()
             .spacing(7)
@@ -255,7 +251,7 @@ impl CategoryScreen {
                 text("Signal").width(Length::Fill).center()
             )
             .push({
-                let mut groups = groups.iter()
+                let mut groups = data.groups.iter()
                 .filter_map(|(key, group)| match key {
                     Key::Signal(key) => Some((key, group)),
                     _ => None
@@ -283,7 +279,7 @@ impl CategoryScreen {
                     text("Whatsapp").width(Length::Fill).center()
             )
             .push({
-                let mut groups = groups.iter()
+                let mut groups = data.groups.iter()
                 .filter_map(|(key, group)| match key {
                     Key::Whatsapp(key) => Some((key, group)),
                     _ => None
@@ -313,10 +309,10 @@ impl CategoryScreen {
         .into()
     }
 
-    fn category_networks(&self, index: usize) -> Element<'_, Message> {
-        let mut all_networks = self.networks.keys().collect::<Vec<_>>();
+    fn category_networks<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
+        let mut all_networks = data.networks.keys().collect::<Vec<_>>();
         all_networks.sort_unstable();
-        let category = &self.categories[index];
+        let category = &data.categories[index];
 
         scrollable(
             all_networks.into_iter()
@@ -325,7 +321,7 @@ impl CategoryScreen {
                 .spacing(7),
                 |col, id| col.push(
                     checkbox(category.networks.contains(id))
-                    .label(&self.networks.get(id).unwrap().name)
+                    .label(&data.networks.get(id).unwrap().name)
                     .on_toggle(move |state| Message::ToggleNetwork(index, *id, state))
                 )
             )
@@ -335,14 +331,14 @@ impl CategoryScreen {
         .into()
     }
 
-    pub fn view<'a>(&'a self, groups: &'a HashMap<Key, Group>) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
         let mut main_row = Row::new()
         .padding(10)
         .spacing(10)
         .width(Length::Fill)
         .height(Length::Fill)
         .push(
-            self.category_list()
+            self.category_list(data)
         );
 
         if let Some(index) = self.selected_category {
@@ -351,7 +347,7 @@ impl CategoryScreen {
                 .width(Length::FillPortion(4))
                 .spacing(20)
                 .push(
-                    text(self.categories[index].name())
+                    text(data.categories[index].name())
                     .width(Length::Fill)
                     .size(24)
                     .center()
@@ -360,17 +356,17 @@ impl CategoryScreen {
                     Row::new()
                     .width(Length::Fill)
                     .push(
-                        self.category_groups(index, groups)
+                        self.category_groups(index, data)
                     )
                     .push(
-                        self.category_networks(index)
+                        self.category_networks(index, data)
                     )
                 )
             )
         }
         else {
             main_row = main_row.push(
-                self.general_groups(groups)
+                self.general_groups(&data.groups)
             )
         }
 

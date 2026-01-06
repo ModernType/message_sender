@@ -3,7 +3,7 @@ use std::net::SocketAddrV4;
 use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, rich_text, scrollable, span, svg, text, text_input}};
 use rfd::FileHandle;
 
-use crate::{send_categories::parse_networks_data, ui::{main_screen, theme::Theme}};
+use crate::{send_categories::parse_networks_data, ui::{AppData, main_screen, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -27,41 +27,31 @@ impl From<Message> for MainMessage {
 
 #[derive(Debug)]
 pub(super) struct SettingsScreen {
-    pub markdown: bool,
-    pub parallel: bool,
     recieve_address_edit: String,
     address_correct: bool,
-    pub recieve_address: SocketAddrV4,
-    pub history_len: u32,
-    pub theme_selected: Theme,
 }
 
 impl SettingsScreen {
-    pub fn new(markdown: bool, parallel: bool, recieve_address: SocketAddrV4, history_len: u32, theme: Theme) -> Self {
+    pub fn new(data: &AppData) -> Self {
         Self {
-            markdown,
-            parallel,
-            recieve_address,
-            recieve_address_edit: recieve_address.to_string(),
+            recieve_address_edit: data.recieve_address.to_string(),
             address_correct: true,
-            history_len,
-            theme_selected: theme,
         }
     }
 
-    pub fn update(&mut self, message: Message) -> Task<MainMessage> {
+    pub fn update(&mut self, message: Message, data: &mut AppData) -> Task<MainMessage> {
         match message {
             Message::ToMainScreen => return Task::done(MainMessage::SetScreen(super::Screen::Main)),
             Message::ToggleMarkdown(markdown) => {
-                self.markdown = markdown;
+                data.markdown = markdown;
             },
             Message::ToggleParallel(parallel) => {
-                self.parallel = parallel;
+                data.parallel = parallel;
             },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
                 match recieve_address_edit.parse() {
                     Ok(addr) => {
-                        self.recieve_address = addr;
+                        data.recieve_address = addr;
                         self.address_correct = true;
                     },
                     Err(_) => self.address_correct = false,
@@ -70,12 +60,11 @@ impl SettingsScreen {
             },
             Message::HistoryLenEdit(text) => {
                 if let Ok(num) = text.parse::<u32>() {
-                    self.history_len = num;
-                    return Task::done(main_screen::Message::SetHistoryLimit(num).into());
+                    data.history_len = num;
                 }
             },
             Message::ThemeSelected(theme) => {
-                self.theme_selected = theme.clone();
+                data.theme = theme.clone();
                 return Task::done(MainMessage::ThemeChange(theme));
             },
             Message::ChooseNetworkFile => {
@@ -112,7 +101,7 @@ impl SettingsScreen {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
         Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
@@ -155,17 +144,17 @@ impl SettingsScreen {
                 .push(
                     column![
                         text("Кількість повідомлень в історії"),
-                        text_input("Кількість повідомлень в історії", &self.history_len.to_string())
+                        text_input("Кількість повідомлень в історії", &data.history_len.to_string())
                         .on_input(Message::HistoryLenEdit)
                     ]
                 )
                 .push(
-                    checkbox(self.markdown)
+                    checkbox(data.markdown)
                     .label("Використовувати форматування markdown при відправці повідомлень")
                     .on_toggle(Message::ToggleMarkdown)
                 )
                 .push(
-                    checkbox(self.parallel)
+                    checkbox(data.parallel)
                     .label("Здійснювати відправку повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
                     .on_toggle(Message::ToggleParallel)
                 )
@@ -179,7 +168,7 @@ impl SettingsScreen {
                     .push(
                         pick_list(
                             Theme::ALL, 
-                            Some(&self.theme_selected),
+                            Some(&data.theme),
                             Message::ThemeSelected
                         )
                     )

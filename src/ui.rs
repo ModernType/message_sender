@@ -21,7 +21,7 @@ mod theme;
 
 const NOTIFICATION_SHOW_TIME: u64 = 3000;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Screen {
     Main,
     Settings,
@@ -64,6 +64,7 @@ impl From<SignalMessage> for Message {
 }
 
 pub struct App {
+    data: AppData,
     cur_screen: Screen,
     manager: Option<Manager<SqliteStore, Registered>>,
     whatsapp_client: Option<Arc<whatsapp_rust::Client>>,
@@ -71,7 +72,6 @@ pub struct App {
     sett_scr: SettingsScreen,
     category_scr: CategoryScreen,
     signal_task_send: Option<UnboundedSender<SignalMessage>>,
-    sync_interval: u64,
     now: Instant,
     notification: Notification,
     signal_logged: bool,
@@ -90,7 +90,6 @@ impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
 impl App {
     pub fn new() -> (Self, Task<Message>) {
         let data = AppData::new();
-        let groups = data.cached_groups.into_owned();
         let start_task = if data.theme.is_system() {
             iced::system::theme().map(|mode| Message::ThemeChange(mode.into()))
         }
@@ -100,40 +99,25 @@ impl App {
 
         (
             Self {
+                main_scr: MainScreen::new(),
+                sett_scr: SettingsScreen::new(&data),
+                category_scr: CategoryScreen::new(),
+                signal_logged: data.signal_logged,
+                whatsapp_logged: data.whatsapp_logged,
+                data,
                 manager: None,
                 whatsapp_client: None,
                 cur_screen: Screen::Main,
-                main_scr: MainScreen::new(data.autosend, groups, data.history_len),
-                sett_scr: SettingsScreen::new(data.markdown, data.parallel, data.recieve_address, data.history_len, data.theme),
-                category_scr: CategoryScreen::new(data.categories, data.networks.into_owned()),
                 signal_task_send: None,
-                sync_interval: data.sync_interval,
                 now: Instant::now(),
                 notification: Notification::new(),
-                signal_logged: data.signal_logged,
-                whatsapp_logged: data.whatsapp_logged,
             },
             start_task
         )
     }
 
     fn save(&self) -> anyhow::Result<()> {
-        let data = AppData {
-            cached_groups: Cow::Borrowed(self.main_scr.groups()),
-            autosend: self.main_scr.autosend(),
-            sync_interval: self.sync_interval,
-            markdown: self.sett_scr.markdown,
-            parallel: self.sett_scr.parallel,
-            history_len: self.sett_scr.history_len,
-            recieve_address: self.sett_scr.recieve_address,
-            signal_logged: self.signal_logged,
-            whatsapp_logged: self.whatsapp_logged,
-            theme: self.sett_scr.theme_selected.clone(),
-            send_timeout: 90,
-            categories: self.category_scr.categories.clone(),
-            networks: Cow::Borrowed(&self.category_scr.networks)
-        };
-        data.save()
+        self.data.save()
     }
 
     #[inline]
@@ -145,9 +129,9 @@ impl App {
         self.now = now;
 
         match message {
-            Message::MainScrMessage(m) => self.main_scr.update(m, now, &self.category_scr.categories),
-            Message::SettingsScrMessage(m) => self.sett_scr.update(m),
-            Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.main_scr.groups),
+            Message::MainScrMessage(m) => self.main_scr.update(m, now, &mut self.data),
+            Message::SettingsScrMessage(m) => self.sett_scr.update(m, &mut self.data),
+            Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.data),
             Message::SignalMessage(m) => {
                 if let Some(channel) = self.signal_task_send.as_ref() {
                     let mut channel = channel.clone();
@@ -162,7 +146,18 @@ impl App {
             },
             Message::SetScreen(screen) => {
                 self.cur_screen = screen;
-                Task::none()
+                if let Screen::Main = screen {
+                    if let Err(e) = self.save() {
+                        log::error!("Error saving data: {e}");
+                        Task::done(Message::Notification(format!("Error saving data: {e}")))
+                    }
+                    else {
+                        Task::none()
+                    }
+                }
+                else {
+                    Task::none()
+                }
             }
             Message::SetManager(mng) => {
                 self.manager = Some(mng.clone());
@@ -199,7 +194,7 @@ impl App {
                 Task::batch([
                     if self.signal_logged { Task::done(SignalMessage::LinkBegin.into()) } else { Task::none() },
                     if self.whatsapp_logged { Task::perform(whatsapp::start_whatsapp_task(), |_| Message::None) } else { Task::none() },
-                    Task::perform(message_server::start_server(self.sett_scr.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
+                    Task::perform(message_server::start_server(self.data.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
                 ])
             },
             Message::UpdateGroupList => {
@@ -220,12 +215,12 @@ impl App {
                 let mut task_list = Vec::with_capacity(2);
                 if let Some(manager) = self.manager.as_ref()  {
                     task_list.push(
-                        Task::done(SignalMessage::SendMessage(manager.clone(), message.clone(), self.sett_scr.markdown, self.sett_scr.parallel).into())
+                        Task::done(SignalMessage::SendMessage(manager.clone(), message.clone(), self.data.markdown, self.data.parallel).into())
                     );
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::send_message(client.clone(), message, self.sett_scr.markdown), |_| Message::None)
+                        Task::perform(whatsapp::send_message(client.clone(), message, self.data.markdown), |_| Message::None)
                     );
                 }
                 Task::batch(task_list)
@@ -249,18 +244,18 @@ impl App {
                 let mut task_list = Vec::with_capacity(2);
                 if let Some(manager) = self.manager.as_ref()  {
                     task_list.push(
-                        Task::done(SignalMessage::EditMessage(manager.clone(), message.clone(), timestamps, self.sett_scr.markdown).into())
+                        Task::done(SignalMessage::EditMessage(manager.clone(), message.clone(), timestamps, self.data.markdown).into())
                     );
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::edit_message(client.clone(), message, whatsapp_ids, self.sett_scr.markdown), |_| Message::None)
+                        Task::perform(whatsapp::edit_message(client.clone(), message, whatsapp_ids, self.data.markdown), |_| Message::None)
                     );
                 }
                 Task::batch(task_list)
             },
             Message::AcceptMessage(messages) => {
-                let autosend = messages.iter().fold(self.main_scr.autosend(), |autosend, msg| autosend && !msg.autosend_overwrite);
+                let autosend = messages.iter().fold(self.data.autosend, |autosend, msg| autosend && !msg.autosend_overwrite);
 
                 if autosend {
                     Task::batch(
@@ -303,16 +298,16 @@ impl App {
                     Theme::System => {
                         iced::system::theme().map(|mode| Message::ThemeChange(mode.into()))
                     },
-                    Theme::Light if self.sett_scr.theme_selected.is_system() => {
-                        self.sett_scr.theme_selected = Theme::Light;
+                    Theme::Light if self.data.theme.is_system() => {
+                        self.data.theme = Theme::Light;
                         Task::none()
                     }
-                    Theme::Dark if self.sett_scr.theme_selected.is_system() => {
-                        self.sett_scr.theme_selected = Theme::Dark;
+                    Theme::Dark if self.data.theme.is_system() => {
+                        self.data.theme = Theme::Dark;
                         Task::none()
                     }
                     Theme::Selected(theme) => {
-                        self.sett_scr.theme_selected = Theme::Selected(theme);
+                        self.data.theme = Theme::Selected(theme);
                         Task::none()
                     }
                     _ => {
@@ -321,7 +316,7 @@ impl App {
                 }
             },
             Message::RecivedNetworks(networks) => {
-                self.category_scr.networks.extend(networks);
+                self.data.networks.extend(networks);
                 Task::done(Message::Notification("Нові мережі додані!".to_owned()))
             },
             Message::None => Task::done(main_screen::Message::UpdateMessageHistory.into()),
@@ -334,9 +329,9 @@ impl App {
         .height(Length::Fill)
         .push(
             match self.cur_screen {
-                Screen::Main => self.main_scr.view().map(Into::into),
-                Screen::Settings => self.sett_scr.view().map(Into::into),
-                Screen::Categories => self.category_scr.view(self.main_scr.groups()).map(Into::into)
+                Screen::Main => self.main_scr.view(&self.data).map(Into::into),
+                Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
+                Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
             }
         )
         .push(
@@ -372,14 +367,14 @@ impl App {
     }
 
     pub fn theme(&self) -> iced::Theme {
-        self.sett_scr.theme_selected.as_theme().clone()
+        self.data.theme.as_theme().clone()
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
-pub struct AppData<'a> {
-    pub cached_groups: Cow<'a, HashMap<Key, main_screen::Group>>,
+pub struct AppData {
+    pub groups: HashMap<Key, main_screen::Group>,
     pub recieve_address: SocketAddrV4,
     pub autosend: bool,
     pub sync_interval: u64,
@@ -391,13 +386,13 @@ pub struct AppData<'a> {
     pub whatsapp_logged: bool,
     pub theme: Theme,
     pub categories: Vec<SendCategory>,
-    pub networks: Cow<'a, NetworksPool>,
+    pub networks: NetworksPool,
 }
 
-impl Default for AppData<'_> {
+impl Default for AppData {
     fn default() -> Self {
         Self {
-            cached_groups: Cow::Owned(HashMap::new()),
+            groups: HashMap::new(),
             recieve_address: "127.0.0.1:8000".parse().unwrap(),
             autosend: false,
             sync_interval: 10,
@@ -409,12 +404,12 @@ impl Default for AppData<'_> {
             whatsapp_logged: false,
             theme: Theme::None,
             categories: Vec::new(),
-            networks: Cow::Owned(HashMap::new()),
+            networks: HashMap::new(),
         }
     }
 }
 
-impl AppData<'_> {
+impl AppData {
     pub fn load() -> anyhow::Result<Self> {
         let data = File::open("data.ron")?;
         let state = ron::de::from_reader(data)?;
