@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use iced::{Alignment, Color, Font, Length, Pixels};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, scrollable, space, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, scrollable, space, svg, text, text_input};
 
 use crate::message::SendMode;
 use crate::messangers::Key;
 use crate::send_categories::{NetworksPool, SendCategory};
-use crate::ui::{AppData, Message as MainMessage};
+use crate::ui::{AppData, Message as MainMessage, icons};
 use crate::ui::ext::PushMaybe;
 use crate::ui::main_screen::Group;
 
@@ -23,6 +23,7 @@ pub enum Message {
     AddCategory,
     EditNewName(String),
     CategoryToggled(usize),
+    CategoryDelete(usize),
     ShowGeneral,
     ToggleGroup(usize, Key, SendMode),
     ToggleNetwork(usize, u64, bool),
@@ -69,6 +70,12 @@ impl CategoryScreen {
                 else {
                     self.selected_category = Some(index)
                 }
+            },
+            Message::CategoryDelete(index) => {
+                if self.selected_category.is_some() {
+                    self.selected_category = None
+                }
+                data.categories.remove(index);
             },
             Message::ShowGeneral => {
                 self.selected_category = None;
@@ -155,21 +162,34 @@ impl CategoryScreen {
                 col,
                 |col, (index, category)| {
                     col.push(
-                        button(
-                            text(category.name())
+                        Row::new()
+                        .spacing(3)
+                        .push(
+                            button(
+                                text(category.name())
+                                .width(Length::Fill)
+                                .center()
+                            )
+                            .style(
+                                if let Some(sel_index) = self.selected_category && sel_index == index {
+                                    button::primary
+                                }
+                                else {
+                                    button::secondary
+                                }
+                            )
                             .width(Length::Fill)
-                            .center()
+                            .on_press(Message::CategoryToggled(index))
                         )
-                        .style(
-                            if let Some(sel_index) = self.selected_category && sel_index == index {
-                                button::primary
-                            }
-                            else {
-                                button::secondary
-                            }
+                        .push(
+                            button(
+                                svg(svg::Handle::from_memory(icons::DELETE))
+                                .width(Length::Shrink)
+                            )
+                            .width(Length::Shrink)
+                            .style(button::danger)
+                            .on_press(Message::CategoryDelete(index))
                         )
-                        .width(Length::Fill)
-                        .on_press(Message::CategoryToggled(index))
                     )
                 }
             )
@@ -180,70 +200,88 @@ impl CategoryScreen {
     }
 
     fn general_groups<'a>(&'a self, groups: &'a HashMap<Key, Group>) -> Element<'a, Message> {
-        Column::new()
-        .push(
-            text("Загальна")
-            .width(Length::Fill)
-            .size(24)
-            .center()
+        scrollable(
+            Column::new()
+            .spacing(7)
+            .push(
+                text("Signal").width(Length::Fill).center()
+            )
+            .push({
+                let mut groups = groups.iter()
+                .filter_map(|(key, group)| match key {
+                    Key::Signal(key) => Some((key, group)),
+                    _ => None
+                })
+                .collect::<Vec<_>>();
+                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
+                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
+                    checkbox(group.active())
+                    .label(&group.title)
+                    .on_toggle(move |_| Message::ToggleGeneralGroup(Key::Signal(*key), group.send_mode.next()))
+                    .icon(checkbox::Icon {
+                        font: Font::with_name("Material Icons"),
+                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
+                                    else { '\u{e5ca}' },
+                        size: Some(Pixels::from(14)),
+                        line_height: text::LineHeight::default(),
+                        shaping: text::Shaping::Basic,
+                    })
+                ))
+            })
+            .push(
+                    text("Whatsapp").width(Length::Fill).center()
+            )
+            .push({
+                let mut groups = groups.iter()
+                .filter_map(|(key, group)| match key {
+                    Key::Whatsapp(key) => Some((key, group)),
+                    _ => None
+                })
+                .collect::<Vec<_>>();
+                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
+                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
+                    checkbox(group.active())
+                    .label(&group.title)
+                    .on_toggle(move |_| Message::ToggleGeneralGroup(Key::Whatsapp(key.clone()), group.send_mode.next()))
+                    .icon(checkbox::Icon {
+                        font: Font::with_name("Material Icons"),
+                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
+                                    else { '\u{e5ca}' },
+                        size: Some(Pixels::from(14)),
+                        line_height: text::LineHeight::default(),
+                        shaping: text::Shaping::Basic,
+                    })
+                ))
+            })
         )
-        .push(
-            scrollable(
-                Column::new()
-                .spacing(7)
-                .push(
-                    text("Signal").width(Length::Fill).center()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    }
+
+    fn general_networks<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
+        let col = Column::new()
+        .spacing(3)
+        .width(Length::Fill)
+        .height(Length::Fill);
+        
+        let mut checks = data.networks.keys().collect::<HashSet<_>>();
+
+        for cat in data.categories.iter() {
+            checks.retain(|id| !cat.networks.contains(id));
+        }
+
+        scrollable(
+            data.networks.iter().fold(
+                col,
+                |col, (_, net)|
+                col.push(
+                    checkbox(checks.contains(&net.id))
+                    .label(&net.name)
                 )
-                .push({
-                    let mut groups = groups.iter()
-                    .filter_map(|(key, group)| match key {
-                        Key::Signal(key) => Some((key, group)),
-                        _ => None
-                    })
-                    .collect::<Vec<_>>();
-                    groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                    groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                        checkbox(group.active())
-                        .label(&group.title)
-                        .on_toggle(move |_| Message::ToggleGeneralGroup(Key::Signal(*key), group.send_mode.next()))
-                        .icon(checkbox::Icon {
-                            font: Font::with_name("Material Icons"),
-                            code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
-                                        else { '\u{e5ca}' },
-                            size: Some(Pixels::from(14)),
-                            line_height: text::LineHeight::default(),
-                            shaping: text::Shaping::Basic,
-                        })
-                    ))
-                })
-                .push(
-                        text("Whatsapp").width(Length::Fill).center()
-                )
-                .push({
-                    let mut groups = groups.iter()
-                    .filter_map(|(key, group)| match key {
-                        Key::Whatsapp(key) => Some((key, group)),
-                        _ => None
-                    })
-                    .collect::<Vec<_>>();
-                    groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                    groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                        checkbox(group.active())
-                        .label(&group.title)
-                        .on_toggle(move |_| Message::ToggleGeneralGroup(Key::Whatsapp(key.clone()), group.send_mode.next()))
-                        .icon(checkbox::Icon {
-                            font: Font::with_name("Material Icons"),
-                            code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
-                                        else { '\u{e5ca}' },
-                            size: Some(Pixels::from(14)),
-                            line_height: text::LineHeight::default(),
-                            shaping: text::Shaping::Basic,
-                        })
-                    ))
-                })
             )
         )
-        .width(Length::FillPortion(4))
+        .width(Length::Fill)
         .height(Length::Fill)
         .into()
     }
@@ -350,7 +388,7 @@ impl CategoryScreen {
         if let Some(index) = self.selected_category {
             main_row = main_row.push(
                 Column::new()
-                .width(Length::FillPortion(4))
+                .width(Length::FillPortion(3))
                 .spacing(20)
                 .push(
                     text(data.categories[index].name())
@@ -372,7 +410,20 @@ impl CategoryScreen {
         }
         else {
             main_row = main_row.push(
-                self.general_groups(&data.groups)
+                Column::new()
+                .spacing(20)
+                .push(
+                    text("Загальна")
+                    .size(24)
+                    .width(Length::Fill)
+                    .center()
+                )
+                .push(
+                    Row::new()
+                    .push(self.general_groups(&data.groups))
+                    .push(self.general_networks(data))
+                )
+                .width(Length::FillPortion(3))
             )
         }
 

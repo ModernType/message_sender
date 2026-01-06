@@ -624,6 +624,14 @@ impl MainScreen {
                     })
                 )
             )
+            .push(
+                button(
+                    text("Категорії надсилання")
+                    .width(Length::Fill)
+                    .center()
+                )
+                .on_press(Message::Categories)
+            )
             .push_maybe(
                 (
                     (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
@@ -650,14 +658,6 @@ impl MainScreen {
                         }
                     )
                 )
-            )
-            .push(
-                button(
-                    text("Категорії надсилання")
-                    .width(Length::Fill)
-                    .center()
-                )
-                .on_press(Message::Categories)
             )
             .push_maybe(
                 data.show_groups.then(|| self.group_list(&data.groups))

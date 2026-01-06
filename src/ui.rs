@@ -16,6 +16,7 @@ pub mod main_screen;
 pub mod settings_screen;
 pub mod message_history;
 pub mod category_screen;
+mod icons;
 mod ext;
 mod theme;
 
