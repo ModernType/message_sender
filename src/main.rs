@@ -18,7 +18,10 @@ fn main() {
     let log_file = File::create("sender.log").unwrap();
     simplelog::CombinedLogger::init(vec![
         simplelog::TermLogger::new(
+            #[cfg(debug_assertions)]
             log::LevelFilter::Info,
+            #[cfg(not(debug_assertions))]
+            log::LevelFilter::Warn,
             Config::default(),
             simplelog::TerminalMode::Mixed,
             simplelog::ColorChoice::Auto,
