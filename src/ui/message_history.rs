@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}};
+use std::{iter::once, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
 
 use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
 use unicode_segmentation::UnicodeSegmentation;
@@ -200,10 +200,15 @@ impl SendMessageInfo {
             .padding(5)
             .push(
                 text(
-                    self.content.graphemes(true).take(23).collect::<String>()
+                    self.content.lines()
+                    .filter(|l| l.len() > 3)
+                    .take(3)
+                    .collect::<Vec<_>>()
+                    .join("\n")
                 )
                 .center()
                 .wrapping(text::Wrapping::None)
+                .size(12)
                 .width(Length::Fill)
             )
             .push(
