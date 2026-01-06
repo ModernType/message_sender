@@ -171,7 +171,12 @@ impl SendMessageInfo {
     // }
 
     pub fn set_status(&self, status: SendStatus, ordering: Ordering) {
-        // TODO: Add check with sent_count to determine true `Sent` and `Deleted` state
+        let sent_count = self.sent_count();
+        if SendStatus::Deleted == status && sent_count != 0 
+        || SendStatus::Sent == status && sent_count != self.len()
+        {
+            return;
+        }
         self.status.store(status as u8, ordering);
     }
 
