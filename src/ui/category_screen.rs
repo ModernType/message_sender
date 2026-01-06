@@ -81,9 +81,15 @@ impl CategoryScreen {
             },
             Message::ToggleNetwork(index, network, state) => {
                 let category = &mut self.categories[index];
-                category.networks.insert(network, state);
+                if state {
+                    category.networks.insert(network);
+                }
+                else {
+                    category.networks.remove(&network);
+                }
             },
             Message::Back => {
+                self.categories.iter_mut().for_each(SendCategory::shrink);
                 return Task::done(MainMessage::SetScreen(super::Screen::Main));
             }
         }
@@ -318,7 +324,7 @@ impl CategoryScreen {
                 Column::new()
                 .spacing(7),
                 |col, name| col.push(
-                    checkbox(category.networks.get(name).cloned().unwrap_or_default())
+                    checkbox(category.networks.contains(name))
                     .label(name)
                     .on_toggle(move |state| Message::ToggleNetwork(index, name.clone(), state))
                 )

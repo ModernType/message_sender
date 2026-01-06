@@ -196,6 +196,7 @@ impl MainScreen {
                 }
                 self.message_history.push_front(message.clone());
 
+
                 return Task::batch([
                     Task::done(MainMessage::Notification("Початок відправки повідомлення".to_owned())),
                     Task::done(MainMessage::SendMessage(

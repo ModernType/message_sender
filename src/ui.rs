@@ -6,6 +6,7 @@ use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, text, text_editor}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
+use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::{Group, LinkState}, theme::Theme}};
 
@@ -348,7 +349,7 @@ impl App {
         Subscription::batch([
             iced::system::theme_changes().map(|mode| Message::ThemeChange(mode.into())),
             Subscription::run(Self::setup_subscription),
-            iced::time::every(std::time::Duration::from_secs(self.sync_interval)).map(|_| Message::UpdateGroupList),
+            // iced::time::every(std::time::Duration::from_secs(self.sync_interval)).map(|_| Message::UpdateGroupList),
             iced::window::close_requests().map(|_| Message::OnClose),
             if self.is_animating() { iced::window::frames().map(|_| Message::None) } else { Subscription::none() },
         ])
@@ -430,7 +431,10 @@ impl AppData<'_> {
             .write(true)
             .truncate(true)
             .open("data.ron")?;
-        let s = ron::ser::to_string(self)?;
+        let s = ron::ser::to_string_pretty(
+            self,
+            PrettyConfig::default(),
+        )?;
         config_file.write_all(s.as_bytes())?;
         Ok(())
     }
