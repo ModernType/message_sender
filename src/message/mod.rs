@@ -24,11 +24,6 @@ impl SendMode {
     }
 
     pub fn active(self) -> bool {
-        if let Self::Off = self {
-            false
-        }
-        else {
-            true
-        }
+        !matches!(self, Self::Off)
     }
 }

@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use iced::{Alignment, Color, Font, Length, Pixels};
+use iced::{Font, Length, Pixels};
 use iced::{Element, Task};
 use iced::widget::{Column, Row, button, checkbox, scrollable, space, svg, text, text_input};
 
 use crate::message::SendMode;
 use crate::messangers::Key;
-use crate::send_categories::{NetworksPool, SendCategory};
+use crate::send_categories::SendCategory;
 use crate::ui::{AppData, Message as MainMessage, icons};
 use crate::ui::ext::PushMaybe;
 use crate::ui::main_screen::Group;

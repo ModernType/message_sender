@@ -1,9 +1,9 @@
-use std::{collections::{HashMap, VecDeque}, sync::{Arc, Mutex}, time::Instant};
+use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
 
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, send_categories::{NetworkInfo, SendCategory}, ui::{AppData, main_screen, message_history::SendMessageInfo}};
+use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, ui::{AppData, main_screen, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -31,7 +31,6 @@ pub enum Message {
     EditMessage(usize),
     CancelEdit,
     ConfirmEdit,
-    SetHistoryLimit(u32),
     ShowSignalGroups(bool),
     ShowWhatsappGroups(bool),
     NextMessage,
@@ -116,9 +115,6 @@ impl MainScreen {
             },
             Message::SetAutoSend(autosend) => {
                 data.autosend = autosend;
-            },
-            Message::SetHistoryLimit(limit) => {
-                data.history_len = limit;
             },
             Message::TextEdit(action) => {
                 self.message_content.perform(action);
@@ -324,7 +320,7 @@ impl MainScreen {
                 groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
                     checkbox(group.active())
                     .label(&group.title)
-                    .on_toggle(move |_| Message::ToggleGroup(Key::Signal(key.clone()), group.send_mode.next()))
+                    .on_toggle(move |_| Message::ToggleGroup(Key::Signal(*key), group.send_mode.next()))
                     .icon(checkbox::Icon {
                         font: Font::with_name("Material Icons"),
                         code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }

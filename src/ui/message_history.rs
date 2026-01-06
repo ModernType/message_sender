@@ -1,7 +1,6 @@
-use std::{iter::once, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
+use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
 
 use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
-use unicode_segmentation::UnicodeSegmentation;
 use wacore_binary::jid::Jid;
 
 use crate::{message::SendMode, messangers::Key};
@@ -120,16 +119,6 @@ impl GroupInfoWhatsapp {
         let mut lock = self.sent_id.lock().unwrap();
         *lock = id;
         self.sent.store(true, Ordering::Relaxed);
-    }
-
-    pub fn get_message_id(&self) -> Option<String> {
-        let s = self.sent_id.lock().unwrap();
-        if !s.is_empty() {
-            Some(s.clone())
-        }
-        else {
-            None
-        }
     }
 }
 

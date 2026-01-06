@@ -62,8 +62,8 @@ async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<(
 
 pub async fn get_groups(client: Arc<Client>) -> anyhow::Result<Vec<(Key, String)>> {
     Ok(
-        client.groups().get_participating().await?.into_iter()
-        .map(|(_key, meta)| (meta.id.into(), meta.subject))
+        client.groups().get_participating().await?.values()
+        .map(|meta| (meta.id.clone().into(), meta.subject.clone()))
         .collect()
     )
 }

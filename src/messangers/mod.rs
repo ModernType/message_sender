@@ -12,13 +12,3 @@ pub enum Key {
     Whatsapp(Jid),
 }
 
-impl Key {
-    pub fn is_signal(&self) -> bool {
-        matches!(self, Self::Signal(_))
-    }
-
-    pub fn is_whatsapp(&self) -> bool {
-        matches!(self, Self::Whatsapp(_))
-    }
-}
-

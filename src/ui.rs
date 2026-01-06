@@ -1,14 +1,13 @@
 use std::{
-    borrow::Cow, collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::{Arc, Mutex}, time::{Duration, Instant}
+    collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
 };
-use derive_more::Display;
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, text, text_editor}};
+use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, text}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
-use crate::{message::OperatorMessage, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::{Group, LinkState}, theme::Theme}};
+use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 

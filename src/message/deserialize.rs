@@ -128,7 +128,7 @@ impl<'a> Deref for Name<'a> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 

@@ -1,9 +1,7 @@
-use std::net::SocketAddrV4;
-
-use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, rich_text, scrollable, span, svg, text, text_input}};
+use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, scrollable, svg, text, text_input}};
 use rfd::FileHandle;
 
-use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, main_screen, theme::Theme}};
+use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
 
 use super::Message as MainMessage;
 

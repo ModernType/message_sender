@@ -92,7 +92,7 @@ async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
 
 pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> {
     Ok(
-        manager.store().groups().await?.into_iter()
+        manager.store().groups().await?
         .flatten()
         .map(|(key, group)| {
             (Key::from(key), group.title)
@@ -143,7 +143,7 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
                         }
                         Err(e) => {
                             warn!("Link failure: {e}");
-                            return Err(e)
+                            Err(e)
                         },
                     }
                 },
@@ -200,7 +200,7 @@ async fn send_message(
                     manager.clone(),
                     group,
                     &message.content,
-                    message.freq.as_ref().map(|s| s.as_str()),
+                    message.freq.as_deref(),
                     markdown,
                 ).await {
                     Ok(_) => {
@@ -225,7 +225,7 @@ async fn send_message(
                         manager.clone(),
                         group,
                         &message.content,
-                        message.freq.as_ref().map(|s| s.as_str()),
+                        message.freq.as_deref(),
                         markdown,
                     ).await {
                         Ok(_) => {
