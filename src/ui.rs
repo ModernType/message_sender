@@ -51,6 +51,16 @@ pub enum Message {
     None,
 }
 
+#[macro_export]
+macro_rules! notification {
+    ($s:expr) => {
+        $crate::ui::Message::Notification($s.to_string())
+    };
+    ($s:literal $(, $v:expr)* $(,)?) => {
+        $crate::ui::Message::Notification(format!($s $(, $v)*))
+    };
+}
+
 impl Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ui::Message").finish_non_exhaustive()
@@ -218,10 +228,18 @@ impl App {
                         Task::done(SignalMessage::SendMessage(manager.clone(), message.clone(), self.data.markdown, self.data.parallel).into())
                     );
                 }
+                else if !message.groups_signal.is_empty() {
+                    message.set_status(message_history::SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
+                    return Task::done(notification!("Прив'яжіть, будь ласка, Modern Sender до Signal"));
+                }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
                         Task::perform(whatsapp::send_message(client.clone(), message, self.data.markdown), |_| Message::None)
                     );
+                }
+                else if !message.groups_whatsapp.is_empty() {
+                    message.set_status(message_history::SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
+                    return Task::done(notification!("Прив'яжіть, будь ласка, Modern Sender до Whatsapp"));
                 }
                 Task::batch(task_list)
             },
