@@ -51,7 +51,10 @@ impl CategoryScreen {
         match message {
             Message::AddCategory => {
                 match self.new_category_name.take() {
-                    Some(name) if !name.is_empty() => data.categories.push(SendCategory::new(name)),
+                    Some(name) if !name.is_empty() => {
+                        data.categories.push(SendCategory::new(name));
+                        self.selected_category = Some(data.categories.len() - 1);
+                    },
                     None => {
                         self.new_category_name = Some(String::new());
                         return iced::widget::operation::focus(self.edit_new_name_id.clone())
