@@ -1,4 +1,4 @@
-use iced::{Alignment, Element, Font, Length, Task, widget::{Column, Row, button, checkbox, column, pick_list, scrollable, svg, text, text_input}};
+use iced::{Alignment, Border, Element, Font, Length, Padding, Task, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, svg, text, text_input}};
 use rfd::FileHandle;
 
 use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
@@ -111,80 +111,118 @@ impl SettingsScreen {
         Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
+        .padding(Padding::ZERO.horizontal(20).top(20))
+        .spacing(20)
         .push(
-            button(
-                svg(svg::Handle::from_memory(include_bytes!("icons/arrow_back.svg")))
+            Row::new()
+            .push(
+                button(
+                    svg(svg::Handle::from_memory(include_bytes!("icons/arrow_back.svg")))
+                )
+                .style(button::secondary)
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .on_press(Message::ToMainScreen)
             )
-            .width(Length::Shrink)
-            .height(Length::Shrink)
-            .on_press(Message::ToMainScreen)
+            .push(
+                text("Налаштування")
+                .width(Length::Fill)
+                .center()
+                .size(24)
+            )
         )
         .push(
             scrollable(
                 Column::new()
-                .padding(20)
                 .spacing(20)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .align_x(Alignment::Center)
                 .push(
-                    Column::new()
-                    .push(
-                        text("Адреса серверу для прийому повідомлень")
-                    )
-                    .push(
-                        text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
-                        .style(|theme, status| {
-                            let mut default = text_input::default(theme, status);
-                            if !self.address_correct {
-                                default.border.color = theme.palette().danger;
-                            }
-                            default
-                        })
-                        .on_input(Message::RecieveAddressEditChanged)
-                    )
-                    .push(
-                        text("Програму потрібно перезапустити, щоб зміни вступили у силу").font(Font { style:iced::font::Style::Italic, ..Default::default() })
-                    )
-                )
-                .push(
-                    column![
-                        text("Кількість повідомлень в історії"),
-                        text_input("Кількість повідомлень в історії", &data.history_len.to_string())
-                        .on_input(Message::HistoryLenEdit)
-                    ]
-                )
-                .push(
-                    checkbox(data.show_groups)
-                    .label("Показувати список груп на головному екрані")
-                    .on_toggle(Message::ToggleShowGroups)
-                )
-                .push(
-                    checkbox(data.autoupdate_groups)
-                    .label("Автоматично оновлювати список груп з месенджерів")
-                    .on_toggle(Message::ToggleAutoupdateGroups)
-                )
-                .push(
-                    checkbox(data.markdown)
-                    .label("Використовувати форматування markdown при відправці повідомлень")
-                    .on_toggle(Message::ToggleMarkdown)
-                )
-                .push_maybe(
-                    {
-                        #[cfg(debug_assertions)]
-                        let comp_val = true;
-                        #[cfg(not(debug_assertions))]
-                        let comp_val = false;
-                        comp_val.then(||
-                            checkbox(data.parallel)
-                            .label("Здійснювати відправку повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
-                            .on_toggle(Message::ToggleParallel)
+                    container(
+                        Column::new()
+                        .spacing(20)
+                        .width(Length::Fill)
+                        .push(
+                            Column::new()
+                            .push(
+                                text("Адреса серверу для прийому повідомлень")
+                            )
+                            .push(
+                                text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
+                                .style(|theme, status| {
+                                    let mut default = text_input::default(theme, status);
+                                    if !self.address_correct {
+                                        default.border.color = theme.palette().danger;
+                                    }
+                                    default
+                                })
+                                .on_input(Message::RecieveAddressEditChanged)
+                            )
+                            .push(
+                                text("Програму потрібно перезапустити, щоб зміни вступили у силу").font(Font { style:iced::font::Style::Italic, ..Default::default() })
+                            )
                         )
-                    }
+                        .push(
+                            column![
+                                text("Кількість повідомлень в історії"),
+                                text_input("Кількість повідомлень в історії", &data.history_len.to_string())
+                                .on_input(Message::HistoryLenEdit)
+                            ]
+                        )
+                    )
+                    .padding(20)
+                    .style(|theme: &iced::Theme| container::Style {
+                        background: Some(theme.extended_palette().background.weakest.color.into()),
+                        border: Border::default().rounded(20),
+                        ..Default::default()
+                    })
+                )
+                .push(
+                    container(
+                        Column::new()
+                        .width(Length::Fill)
+                        .spacing(20)
+                        .push(
+                            checkbox(data.show_groups)
+                            .label("Показувати список груп на головному екрані")
+                            .on_toggle(Message::ToggleShowGroups)
+                        )
+                        .push(
+                            checkbox(data.autoupdate_groups)
+                            .label("Автоматично оновлювати список груп з месенджерів")
+                            .on_toggle(Message::ToggleAutoupdateGroups)
+                        )
+                        .push(
+                            checkbox(data.markdown)
+                            .label("Використовувати форматування Markdown при надсиланні повідомлень")
+                            .on_toggle(Message::ToggleMarkdown)
+                        )
+                        .push_maybe(
+                            {
+                                #[cfg(debug_assertions)]
+                                let comp_val = true;
+                                #[cfg(not(debug_assertions))]
+                                let comp_val = false;
+                                comp_val.then(||
+                                    checkbox(data.parallel)
+                                    .label("Здійснювати надсилання повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
+                                    .on_toggle(Message::ToggleParallel)
+                                )
+                            }
+                        )
+                    )
+                    .padding(20)
+                    .style(|theme: &iced::Theme| container::Style {
+                        background: Some(theme.extended_palette().background.weakest.color.into()),
+                        border: Border::default().rounded(20),
+                        ..Default::default()
+                    })
                 )
                 .push(
                     Row::new()
                     .spacing(5)
+                    .align_y(Alignment::Center)
                     .push(
                         text("Тема додатку")
                         .center()

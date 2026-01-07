@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
+use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}};
 
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
@@ -70,7 +70,7 @@ impl MainScreen {
             message_content: Default::default(),
             message_history: Default::default(),
             show_message_history: Animation::new(false)
-                .slow()
+                .duration(Duration::from_millis(300))
                 .easing(iced::animation::Easing::EaseInOut),
             edit: None,
             now: Instant::now(),
@@ -464,7 +464,18 @@ impl MainScreen {
                 self.register_url.as_ref().map(
                     |data| responsive(
                         |size| qr_code(data)
-                        .style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
+                        .style(|theme: &iced::Theme| {
+                            let palette = theme.extended_palette();
+                            qr_code::Style {
+                                cell: Color::BLACK,
+                                background: if palette.is_dark {
+                                    Color::WHITE
+                                }
+                                else {
+                                    palette.background.base.color
+                                }
+                            }
+                        })
                         .total_size(size.height.min(size.width))
                         .into()
                     )
@@ -474,7 +485,18 @@ impl MainScreen {
                 self.whatsapp_url.as_ref().map(
                     |data| responsive(
                         |size| qr_code(data)
-                        .style(|_| qr_code::Style { cell: Color::BLACK, background: Color::WHITE })
+                        .style(|theme: &iced::Theme| {
+                            let palette = theme.extended_palette();
+                            qr_code::Style {
+                                cell: Color::BLACK,
+                                background: if palette.is_dark {
+                                    Color::WHITE
+                                }
+                                else {
+                                    palette.background.base.color
+                                }
+                            }
+                        })
                         .total_size(size.height.min(size.width))
                         .into()
                     )
@@ -489,6 +511,11 @@ impl MainScreen {
                 .height(Length::Fill)
                 .on_action(Message::TextEdit)
                 .highlight("md", iced::highlighter::Theme::SolarizedDark)
+                .style(|theme, status| {
+                    let mut style = text_editor::default(theme, status);
+                    style.background = theme.extended_palette().background.weakest.color.into();
+                    style
+                })
             )
             .push(
                 if self.edit.is_some() {
@@ -583,20 +610,22 @@ impl MainScreen {
             .push(
                 Row::new()
                 .height(70)
+                .spacing(5)
                 .push(
-                    container(
-                        button(
-                            svg(svg::Handle::from_memory(include_bytes!("icons/settings.svg")))
-                            .width(Length::Fill)
-                            .style(|theme: &iced::Theme, _status| {
-                                svg::Style { color: Some(theme.palette().text) }
-                            })
-                        )
-                        .style(button::text)
-                        .on_press(Message::Settings)
+                    button(
+                        svg(svg::Handle::from_memory(include_bytes!("icons/settings.svg")))
                         .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(|theme: &iced::Theme, _status| {
+                            svg::Style { color: Some(theme.palette().text) }
+                        })
                     )
-                    .center(Length::Fill)
+                    .on_press(Message::Settings)
+                    .style(|theme, status| {
+                        let mut style = button::subtle(theme, status);
+                        style.border = Border::default().rounded(20);
+                        style
+                    })
                 )
                 .push(
                     button(

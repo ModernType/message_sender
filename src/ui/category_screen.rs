@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use iced::{Font, Length, Pixels};
+use iced::{Alignment, Border, Font, Length, Pixels};
 use iced::{Element, Task};
 use iced::widget::{Column, Row, button, checkbox, container, scrollable, space, svg, text, text_input};
 
@@ -114,17 +114,31 @@ impl CategoryScreen {
         let col = Column::new()
         .spacing(5)
         .push(
-            button(
-                text("<- Категорії відправки")
-                .center()
-                .size(20)
+            Row::new()
+            .spacing(3)
+            .align_y(Alignment::Center)
+            .push(
+                button(
+                    svg(svg::Handle::from_memory(icons::ARROW_BACK))
+                    .width(Length::Shrink)
+                )
+                .on_press(Message::Back)
+                .style(button::secondary)
             )
-            .style(button::text)
-            .on_press(Message::Back)
+            .push(
+                text("Категорії надсилання")
+                .width(Length::Fill)
+                .size(20)
+                .center()
+            )
+        )
+        .push(
+            space()
+            .height(15)
         )
         .push(
             button(
-                text("+")
+                text("Додати")
                 .width(Length::Fill)
                 .center()
             )
@@ -141,7 +155,7 @@ impl CategoryScreen {
         )
         .push(
             space()
-            .height(25)
+            .height(15)
         )
         .push(
             button(
@@ -155,7 +169,7 @@ impl CategoryScreen {
                     button::primary
                 }
                 else {
-                    button::secondary
+                    button::subtle
                 }
             )
         );
@@ -169,6 +183,7 @@ impl CategoryScreen {
                     col.push(
                         Row::new()
                         .spacing(3)
+                        .height(Length::Shrink)
                         .push(
                             button(
                                 text(category.name())
@@ -180,7 +195,7 @@ impl CategoryScreen {
                                     button::primary
                                 }
                                 else {
-                                    button::secondary
+                                    button::subtle
                                 }
                             )
                             .width(Length::Fill)
@@ -188,11 +203,12 @@ impl CategoryScreen {
                         )
                         .push(
                             button(
-                                svg(svg::Handle::from_memory(icons::DELETE))
+                                // svg(svg::Handle::from_memory(icons::DELETE))
+                                text("X")
                                 .width(Length::Shrink)
                             )
                             .width(Length::Shrink)
-                            .style(button::danger)
+                            .style(button::subtle)
                             .on_press(Message::CategoryDelete(index))
                         )
                     )
@@ -208,6 +224,7 @@ impl CategoryScreen {
         scrollable(
             Column::new()
             .spacing(7)
+            .padding(10)
             .push(
                 text("Signal").width(Length::Fill).center()
             )
@@ -261,6 +278,14 @@ impl CategoryScreen {
         )
         .width(Length::Fill)
         .height(Length::Fill)
+        .style(|theme: &iced::Theme, status| scrollable::Style {
+            container: container::Style {
+                background: Some(theme.extended_palette().background.weakest.color.into()),
+                border: Border::default().rounded(20),
+                ..Default::default()
+            },
+            ..scrollable::default(theme, status)
+        })
         .into()
     }
 
@@ -268,7 +293,13 @@ impl CategoryScreen {
         let col = Column::new()
         .spacing(3)
         .width(Length::Fill)
-        .height(Length::Fill);
+        .height(Length::Fill)
+        .padding(10)
+        .push(
+            text("Мережі")
+            .center()
+            .width(Length::Fill)
+        );
         
         let mut checks = data.networks.keys().collect::<HashSet<_>>();
 
@@ -286,6 +317,14 @@ impl CategoryScreen {
                 )
             )
         )
+        .style(|theme: &iced::Theme, status| scrollable::Style {
+            container: container::Style {
+                background: Some(theme.extended_palette().background.weakest.color.into()),
+                border: Border::default().rounded(20),
+                ..Default::default()
+            },
+            ..scrollable::default(theme, status)
+        })
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -296,6 +335,7 @@ impl CategoryScreen {
         scrollable(
             Column::new()
             .spacing(7)
+            .padding(10)
             .push(
                 text("Signal").width(Length::Fill).center()
             )
@@ -353,6 +393,14 @@ impl CategoryScreen {
                 ))
             })
         )
+        .style(|theme: &iced::Theme, status| scrollable::Style {
+            container: container::Style {
+                background: Some(theme.extended_palette().background.weakest.color.into()),
+                border: Border::default().rounded(20),
+                ..Default::default()
+            },
+            ..scrollable::default(theme, status)
+        })
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -367,7 +415,13 @@ impl CategoryScreen {
             all_networks.into_iter()
             .fold(
                 Column::new()
-                .spacing(7),
+                .spacing(7)
+                .padding(10)
+                .push(
+                    text("Мережі")
+                    .center()
+                    .width(Length::Fill)
+                ),
                 |col, id| col.push(
                     checkbox(category.networks.contains(id))
                     .label(&data.networks.get(id).unwrap().name)
@@ -375,6 +429,14 @@ impl CategoryScreen {
                 )
             )
         )
+        .style(|theme: &iced::Theme, status| scrollable::Style {
+            container: container::Style {
+                background: Some(theme.extended_palette().background.weakest.color.into()),
+                border: Border::default().rounded(20),
+                ..Default::default()
+            },
+            ..scrollable::default(theme, status)
+        })
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -382,8 +444,8 @@ impl CategoryScreen {
 
     pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
         let mut main_row = Row::new()
-        .padding(10)
-        .spacing(10)
+        .padding(20)
+        .spacing(20)
         .width(Length::Fill)
         .height(Length::Fill)
         .push(
@@ -402,22 +464,23 @@ impl CategoryScreen {
                     .center()
                 )
                 .push(
-                    container(
-                        checkbox(data.categories[index].use_general)
-                        .label("Відправляти у загальні групи")
-                        .on_toggle(move |state| Message::ToggleUseGeneral(index, state))
-                    )
-                    .center_x(Length::Fill)
-                )
-                .push(
                     Row::new()
                     .width(Length::Fill)
+                    .spacing(20)
                     .push(
                         self.category_groups(index, data)
                     )
                     .push(
                         self.category_networks(index, data)
                     )
+                )
+                .push(
+                    container(
+                        checkbox(data.categories[index].use_general)
+                        .label("Відправляти у загальні групи")
+                        .on_toggle(move |state| Message::ToggleUseGeneral(index, state))
+                    )
+                    .center_x(Length::Fill)
                 )
             )
         }
@@ -433,6 +496,7 @@ impl CategoryScreen {
                 )
                 .push(
                     Row::new()
+                    .spacing(20)
                     .push(self.general_groups(&data.groups))
                     .push(self.general_networks(data))
                 )
