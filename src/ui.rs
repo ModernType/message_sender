@@ -436,6 +436,7 @@ pub struct AppData {
     pub networks: NetworksPool,
     pub show_groups: bool,
     pub autoupdate_groups: bool,
+    pub message_file: bool,
 }
 
 impl Default for AppData {
@@ -456,6 +457,7 @@ impl Default for AppData {
             networks: HashMap::new(),
             show_groups: true,
             autoupdate_groups: true,
+            message_file: false,
         }
     }
 }

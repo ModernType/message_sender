@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, ui::{AppData, main_screen, message_history::SendMessageInfo}};
+use crate::{message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -33,6 +33,7 @@ pub enum Message {
     ConfirmEdit,
     ShowSignalGroups(bool),
     ShowWhatsappGroups(bool),
+    MessageFile,
     NextMessage,
     Categories,
 }
@@ -300,7 +301,39 @@ impl MainScreen {
                 else {
                     self.message_content = text_editor::Content::new();
                 }
-            }
+            },
+            Message::MessageFile => {
+                return Task::future(async move {
+                    let path = match rfd::AsyncFileDialog::new()
+                    .add_filter("Файл повідомлень", &["json"])
+                    .set_title("Виберіть файл з повідомленнями")
+                    .pick_file()
+                    .await {
+                        Some(path) => path,
+                        None => return MainMessage::None,
+                    };
+
+                    let s = match tokio::fs::read_to_string(path.path()).await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("File read error: {}", &e);
+                            return notification!("Помилка зчитування файла: {}", e)
+                        },
+                    };
+
+                    let message = match serde_json::from_str::<Vec<OperatorMessage>>(&s) {
+                        Ok(msgs) => msgs.into_iter().map(AcceptedMessage::from).collect::<Vec<_>>(),
+                        Err(e) => {
+                            log::error!("Message parse error: {e}");
+                            let mut message = AcceptedMessage::from(s);
+                            message.autosend_overwrite = true;
+                            vec![message]
+                        }
+                    };
+
+                    MainMessage::AcceptMessage(message)
+                })
+            },
         }
 
         Task::none()
@@ -451,7 +484,7 @@ impl MainScreen {
         )
     }
 
-    fn main_part(&self, autosend: bool) -> Element<'_, Message> {
+    fn main_part(&self, autosend: bool, message_file: bool) -> Element<'_, Message> {
         let col = Column::new()
         .width(Length::FillPortion(6))
         .height(Length::Fill)
@@ -566,20 +599,39 @@ impl MainScreen {
                 }
                 else {
                     Element::from(
-                        button(
-                            text("Надіслати повідомлення")
-                            .center()
-                            .width(Length::Fill)
-                            .font(iced::Font {
-                                weight: iced::font::Weight::Bold,
-                                ..iced::Font::DEFAULT
-                            })
+                        Column::new()
+                        .spacing(5)
+                        .push(
+                            button(
+                                text("Надіслати повідомлення")
+                                .center()
+                                .width(Length::Fill)
+                                .font(iced::Font {
+                                    weight: iced::font::Weight::Bold,
+                                    ..iced::Font::DEFAULT
+                                })
+                            )
+                            .on_press_maybe(
+                                (
+                                    (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
+                                    && !self.message_content.is_empty()
+                                ).then_some(Message::SendMessagePressed)
+                            )
                         )
-                        .on_press_maybe(
-                            (
-                                (self.signal_state == LinkState::Linked || self.whatsapp_state == LinkState::Linked)
-                                && !self.message_content.is_empty()
-                            ).then_some(Message::SendMessagePressed)
+                        .push_maybe(
+                            message_file.then(||
+                                button(
+                                    text("Надіслати з файлу")
+                                    .center()
+                                    .width(Length::Fill)
+                                    .font(iced::Font {
+                                        weight: iced::font::Weight::Bold,
+                                        ..iced::Font::DEFAULT
+                                    })
+                                )
+                                .style(button::subtle)
+                                .on_press(Message::MessageFile)
+                            )
                         )
                     )
                 }
@@ -706,7 +758,7 @@ impl MainScreen {
             )
         )
         .push(
-            self.main_part(data.autosend)
+            self.main_part(data.autosend, data.message_file)
         )
         .push(
             self.message_history()

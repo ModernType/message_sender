@@ -12,6 +12,7 @@ pub enum Message {
     ToggleParallel(bool),
     ToggleShowGroups(bool),
     ToggleAutoupdateGroups(bool),
+    ToggleMessageFile(bool),
     RecieveAddressEditChanged(String),
     HistoryLenEdit(String),
     ThemeSelected(Theme),
@@ -53,6 +54,9 @@ impl SettingsScreen {
             },
             Message::ToggleAutoupdateGroups(state) => {
                 data.autoupdate_groups = state;
+            },
+            Message::ToggleMessageFile(state) => {
+                data.message_file = state;
             },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
                 match recieve_address_edit.parse() {
@@ -183,6 +187,11 @@ impl SettingsScreen {
                         Column::new()
                         .width(Length::Fill)
                         .spacing(20)
+                        .push(
+                            checkbox(data.message_file)
+                            .label("Показувати функцію відправки повідомлення з файлу")
+                            .on_toggle(Message::ToggleMessageFile)
+                        )
                         .push(
                             checkbox(data.show_groups)
                             .label("Показувати список груп на головному екрані")
