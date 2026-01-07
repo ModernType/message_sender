@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use iced::{Font, Length, Pixels};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, scrollable, space, svg, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, container, scrollable, space, svg, text, text_input};
 
 use crate::message::SendMode;
 use crate::messangers::Key;
@@ -28,6 +28,7 @@ pub enum Message {
     ToggleGroup(usize, Key, SendMode),
     ToggleNetwork(usize, u64, bool),
     ToggleGeneralGroup(Key, SendMode),
+    ToggleUseGeneral(usize, bool),
     Back
 }
 
@@ -95,6 +96,10 @@ impl CategoryScreen {
                 else {
                     category.networks.retain(|v| *v != network);
                 }
+            },
+            Message::ToggleUseGeneral(index, state) => {
+                let cat = &mut data.categories[index];
+                cat.use_general = state;
             },
             Message::Back => {
                 data.categories.iter_mut().for_each(SendCategory::shrink);
@@ -395,6 +400,14 @@ impl CategoryScreen {
                     .width(Length::Fill)
                     .size(24)
                     .center()
+                )
+                .push(
+                    container(
+                        checkbox(data.categories[index].use_general)
+                        .label("Відправляти у загальні групи")
+                        .on_toggle(move |state| Message::ToggleUseGeneral(index, state))
+                    )
+                    .center_x(Length::Fill)
                 )
                 .push(
                     Row::new()

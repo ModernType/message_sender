@@ -11,6 +11,7 @@ pub type NetworksPool = HashMap<u64, NetworkInfo>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendCategory {
     name: String,
+    pub use_general: bool,
     pub networks: Vec<u64>,
     pub groups: HashMap<Key, SendMode>,
 }
@@ -19,6 +20,7 @@ impl SendCategory {
     pub fn new(name: String) -> Self {
         Self {
             name,
+            use_general: true,
             networks: Vec::new(),
             groups: HashMap::new(),
         }

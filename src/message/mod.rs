@@ -6,7 +6,7 @@ pub use deserialize::{Message as OperatorMessage, MessageInner};
 pub use format::{parse_message_with_format, parse_message_with_whatsapp_format};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SendMode {
     #[default]
     Off,
@@ -25,5 +25,11 @@ impl SendMode {
 
     pub fn active(self) -> bool {
         !matches!(self, Self::Off)
+    }
+
+    pub fn update(&mut self, other: Self) {
+        if other > *self {
+            *self = other;
+        }
     }
 }

@@ -141,16 +141,33 @@ impl MainScreen {
 
                 if let Some(network) = network {
                     log::info!("Has network {}", &network);
-                    let mut groups = HashMap::new();
+                    let mut groups: HashMap<&Key, SendMode> = HashMap::new();
+                    let mut use_general = false;
+
                     for category in data.categories.iter() {
                         if category.contains_network(&network) {
-                            groups.extend(category.groups.iter());
+                            for (key, mode) in category.groups.iter() {
+                                groups.entry(key)
+                                .and_modify(|mode| mode.update(*mode))
+                                .or_insert(*mode);
+                            }
+                            use_general |= category.use_general;
                         }
                     }
+
                     if !groups.is_empty() {
-                        log::info!("Has in cateegory");
+                        log::info!("Has in category");
+                        if use_general {
+                            for (key, group) in data.groups.iter() {
+                                if group.active() {
+                                    groups.entry(key)
+                                    .and_modify(|mode| mode.update(group.send_mode))
+                                    .or_insert(group.send_mode);
+                                }
+                            }
+                        }
                         for(key, mode) in groups {
-                            message.push(key.clone(), *mode);
+                            message.push(key.clone(), mode);
                         }
                     }
                     else {
