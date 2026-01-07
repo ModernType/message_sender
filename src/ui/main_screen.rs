@@ -52,7 +52,7 @@ pub(super) struct MainScreen {
     message_content: text_editor::Content,
     pub message_history: VecDeque<Arc<SendMessageInfo>>,
     pub show_message_history: Animation<bool>,
-    edit: Option<Arc<SendMessageInfo>>,
+    pub edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
     show_signal_groups: bool,
     show_whatsapp_groups: bool,

@@ -2,7 +2,7 @@ use std::{
     collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, widget::{Stack, container, text}};
+use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, keyboard, widget::{Stack, container, text}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use ron::ser::PrettyConfig;
@@ -48,6 +48,7 @@ pub enum Message {
     Notification(String),
     NotificationClose,
     RecivedNetworks(HashMap<u64, NetworkInfo>),
+    Keyboard(keyboard::Event),
     None,
 }
 
@@ -168,7 +169,34 @@ impl App {
                 else {
                     Task::none()
                 }
-            }
+            },
+            Message::Keyboard(event) => {
+                if let keyboard::Event::KeyPressed{ key, modifiers, ..} = event {
+                    #[allow(clippy::single_match, clippy::collapsible_match)]
+                    match key {
+                        keyboard::Key::Named(named) => {
+                            match named {
+                                keyboard::key::Named::Escape => match self.cur_screen {
+                                    Screen::Categories | Screen::Settings => return Task::done(Message::SetScreen(Screen::Main)),
+                                    _ => ()
+                                }
+                                keyboard::key::Named::Enter if modifiers.command() => {
+                                    if self.main_scr.edit.is_some() {
+                                        return self.main_scr.update(main_screen::Message::ConfirmEdit, now, &mut self.data)
+                                    }
+                                    else {
+                                        return self.main_scr.update(main_screen::Message::SendMessagePressed, now, &mut self.data)
+                                    }
+                                },
+                                _ => ()
+                            }
+                        },
+                        _ => ()
+                    }
+                }
+
+                Task::none()
+            },
             Message::SetManager(mng) => {
                 self.manager = Some(mng.clone());
                 self.signal_logged = true;
@@ -365,6 +393,7 @@ impl App {
             if self.data.autoupdate_groups { iced::time::every(std::time::Duration::from_secs(10)).map(|_| Message::UpdateGroupList) } else { Subscription::none() },
             iced::window::close_requests().map(|_| Message::OnClose),
             if self.is_animating() { iced::window::frames().map(|_| Message::None) } else { Subscription::none() },
+            iced::keyboard::listen().map(Message::Keyboard),
         ])
     }
 
