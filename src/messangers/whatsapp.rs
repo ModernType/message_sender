@@ -157,14 +157,27 @@ pub async fn edit_message(client: Arc<Client>, message: Arc<SendMessageInfo>, me
     message.set_status(SendStatus::Sent, std::sync::atomic::Ordering::Relaxed);
 }
 
-// TODO: Figure out how to delete messages in whatsapp
-pub async fn delete_message(_client: Arc<Client>, message: Arc<SendMessageInfo>) {
+pub async fn delete_message(client: Arc<Client>, message: Arc<SendMessageInfo>) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     
     send_ui_message(ui::Message::Notification("Повідомлення не буде видалене у Whatsapp".to_owned())).await;
 
     for group in message.groups_whatsapp.iter() {
-        group.delete(std::sync::atomic::Ordering::Relaxed);
+        if let Some(id) = group.message_id() {
+            match client.revoke_message(group.key.clone(), id, whatsapp_rust::RevokeType::Sender).await {
+                Ok(()) => {
+                    group.delete(std::sync::atomic::Ordering::Relaxed);
+                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(ui::main_screen::Message::UpdateMessageHistory).await;
+                },
+                Err(e) => {
+                    log::warn!("Error deleting message: {e}");
+                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(ui::Message::Notification(e.to_string())).await;
+                }
+                
+            }
+        }
     }
 
     message.set_status(SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);

@@ -120,6 +120,11 @@ impl GroupInfoWhatsapp {
         *lock = id;
         self.sent.store(true, Ordering::Relaxed);
     }
+
+    pub fn message_id(&self) -> Option<String> {
+        let lock = self.sent_id.lock().unwrap();
+        (!lock.is_empty()).then(|| lock.clone())
+    }
 }
 
 impl SendMessageInfo {
