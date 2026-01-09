@@ -50,9 +50,9 @@ struct FullNetworkInfo {
     #[serde(rename = "ID")]
     id: u64,
     frequency: u64,
-    frequency_color_schema: u8,
-    transmission: u8,
-    crypt_mode2: u8,
+    frequency_color_schema: u32,
+    transmission: u32,
+    crypt_mode2: u32,
     crypt_keys: Vec<String>,
     hardware_location: Option<String>,
     abonent_ids: Vec<String>,

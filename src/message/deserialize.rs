@@ -30,9 +30,9 @@ pub struct MessageInner<'a> {
     pub message: MessageGroup,
     pub comment: Option<&'a str>,
     #[serde(rename = "rUser")]
-    pub reciever: Name<'a>,
+    pub reciever: Name,
     #[serde(rename = "tUser")]
-    pub sender: Name<'a>,
+    pub sender: Name,
     pub datetime: &'a str,
     pub frequency: &'a str,
     pub location: &'a str,
@@ -121,26 +121,27 @@ impl From<String> for CleanedMessage {
 }
 
 #[derive(Deserialize, Display, Debug, Default)]
-#[serde(from = "Option<&str>")]
-struct Name<'a>(&'a str);
+#[serde(from = "Option<String>")]
+struct Name(String);
 
-impl<'a> Deref for Name<'a> {
+impl Deref for Name {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        self.0
+        self.0.deref()
     }
 }
 
-impl<'a> From<Option<&'a str>> for Name<'a> {
-    fn from(value: Option<&'a str>) -> Self {
+impl From<Option<String>> for Name {
+    fn from(value: Option<String>) -> Self {
         match value {
-            Some(name) => if name.is_empty() {
-                Self("НВ")
+            Some(mut name) => if name.is_empty() {
+                Self("НВ".to_owned())
             } else {
+                name.remove_matches("\n");
                 Self(name)
             },
-            None => Self("НВ")
+            None => Self("НВ".to_owned())
         }
     }
 }
