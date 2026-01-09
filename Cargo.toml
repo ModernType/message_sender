@@ -1,7 +1,7 @@
 cargo-features = ["codegen-backend"]
 [package]
 name = "modern-sender"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 license = "GPLv3"
 exclude = ["sqlite-storage"]
