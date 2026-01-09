@@ -16,6 +16,8 @@ pub struct CategoryScreen {
     pub new_category_name: Option<String>,
     pub selected_category: Option<usize>,
     edit_new_name_id: iced::widget::Id,
+    network_search: String,
+    group_search: String,
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,8 @@ pub enum Message {
     ToggleNetwork(usize, u64, bool),
     ToggleGeneralGroup(Key, SendMode),
     ToggleUseGeneral(usize, bool),
+    NetworkSerch(String),
+    GroupSearch(String),
     Back
 }
 
@@ -43,7 +47,9 @@ impl CategoryScreen {
         Self {
             new_category_name: None,
             selected_category: None,
-            edit_new_name_id: iced::widget::Id::unique()
+            edit_new_name_id: iced::widget::Id::unique(),
+            network_search: String::new(),
+            group_search: String::new(),
         }
     }
 
@@ -107,7 +113,13 @@ impl CategoryScreen {
             Message::Back => {
                 data.categories.iter_mut().for_each(SendCategory::shrink);
                 return Task::done(MainMessage::SetScreen(super::Screen::Main));
-            }
+            },
+            Message::NetworkSerch(s) => {
+                self.network_search = s
+            },
+            Message::GroupSearch(s) => {
+                self.group_search = s
+            },
         }
 
         Task::none()
@@ -229,12 +241,22 @@ impl CategoryScreen {
             .spacing(7)
             .padding(10)
             .push(
+                text("Групи")
+                .center()
+                .width(Length::Fill)
+            )
+            .push(
+                text_input("Пошук", &self.group_search)
+                .on_input(Message::GroupSearch)
+                .width(Length::Fill)
+            )
+            .push(
                 text("Signal").width(Length::Fill).center()
             )
             .push({
                 let mut groups = groups.iter()
                 .filter_map(|(key, group)| match key {
-                    Key::Signal(key) => Some((key, group)),
+                    Key::Signal(key) if group.title.contains(&self.group_search) => Some((key, group)),
                     _ => None
                 })
                 .collect::<Vec<_>>();
@@ -259,7 +281,7 @@ impl CategoryScreen {
             .push({
                 let mut groups = groups.iter()
                 .filter_map(|(key, group)| match key {
-                    Key::Whatsapp(key) => Some((key, group)),
+                    Key::Whatsapp(key) if group.title.contains(&self.group_search) => Some((key, group)),
                     _ => None
                 })
                 .collect::<Vec<_>>();
@@ -302,6 +324,11 @@ impl CategoryScreen {
             text("Мережі")
             .center()
             .width(Length::Fill)
+        )
+        .push(
+            text_input("Пошук", &self.network_search)
+            .on_input(Message::NetworkSerch)
+            .width(Length::Fill)
         );
         
         let mut checks = data.networks.keys().collect::<HashSet<_>>();
@@ -310,13 +337,25 @@ impl CategoryScreen {
             checks.retain(|id| !cat.networks.contains(id));
         }
 
+        let networks = if self.network_search.is_empty() {
+            data.networks.values()
+            .map(|net| (net.id, &net.name))
+            .collect::<Vec<_>>()
+        }
+        else {
+            data.networks.values()
+            .filter(|net| net.name.contains(&self.network_search))
+            .map(|net| (net.id, &net.name))
+            .collect::<Vec<_>>()
+        };
+
         scrollable(
-            data.networks.iter().fold(
+            networks.into_iter().fold(
                 col,
-                |col, (_, net)|
+                |col, (id, name)|
                 col.push(
-                    checkbox(checks.contains(&net.id))
-                    .label(&net.name)
+                    checkbox(checks.contains(&id))
+                    .label(name)
                 )
             )
         )
@@ -340,12 +379,22 @@ impl CategoryScreen {
             .spacing(7)
             .padding(10)
             .push(
+                text("Групи")
+                .center()
+                .width(Length::Fill)
+            )
+            .push(
+                text_input("Пошук", &self.group_search)
+                .on_input(Message::GroupSearch)
+                .width(Length::Fill)
+            )
+            .push(
                 text("Signal").width(Length::Fill).center()
             )
             .push({
                 let mut groups = data.groups.iter()
                 .filter_map(|(key, group)| match key {
-                    Key::Signal(key) => Some((key, group)),
+                    Key::Signal(key) if group.title.contains(&self.group_search) => Some((key, group)),
                     _ => None
                 })
                 .collect::<Vec<_>>();
@@ -373,7 +422,7 @@ impl CategoryScreen {
             .push({
                 let mut groups = data.groups.iter()
                 .filter_map(|(key, group)| match key {
-                    Key::Whatsapp(key) => Some((key, group)),
+                    Key::Whatsapp(key) if group.title.contains(&self.group_search) => Some((key, group)),
                     _ => None
                 })
                 .collect::<Vec<_>>();
@@ -410,8 +459,10 @@ impl CategoryScreen {
     }
 
     fn category_networks<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
-        let mut all_networks = data.networks.keys().collect::<Vec<_>>();
-        all_networks.sort_unstable();
+        let mut all_networks = data.networks.iter()
+        .filter(|(_, info)| self.network_search.is_empty() || info.name.contains(&self.network_search))
+        .collect::<Vec<_>>();
+        all_networks.sort_unstable_by(|(_, info1), (_, info2)| info1.name.cmp(&info2.name));
         let category = &data.categories[index];
 
         scrollable(
@@ -424,8 +475,13 @@ impl CategoryScreen {
                     text("Мережі")
                     .center()
                     .width(Length::Fill)
+                )
+                .push(
+                    text_input("Пошук", &self.network_search)
+                    .on_input(Message::NetworkSerch)
+                    .width(Length::Fill)
                 ),
-                |col, id| col.push(
+                |col, (id, _)| col.push(
                     checkbox(category.networks.contains(id))
                     .label(&data.networks.get(id).unwrap().name)
                     .on_toggle(move |state| Message::ToggleNetwork(index, *id, state))
