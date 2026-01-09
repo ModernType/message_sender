@@ -1,3 +1,4 @@
+cargo-features = ["codegen-backend"]
 [package]
 name = "modern-sender"
 version = "0.4.1"
@@ -61,3 +62,19 @@ curve25519-dalek = { git = 'https://github.com/signalapp/curve25519-dalek', tag 
 [lints.clippy]
 result-large-err = "allow"
 enum-variant-names = "allow"
+
+[profile.dev]
+opt-level = 0
+debug = 0
+strip = "none"
+lto = false
+codegen-units = 256
+incremental = true
+codegen-backend = "cranelift"
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"

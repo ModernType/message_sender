@@ -1,3 +1,7 @@
 [alias]
 h = "hot --features hot"
 release = "build -r"
+rr = "run -r"
+
+[build]
+rustflags = ["-Clink-arg=-fuse-ld=lld", "-Zthreads=12"]
