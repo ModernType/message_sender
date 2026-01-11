@@ -36,6 +36,8 @@ pub enum Message {
     MessageFile,
     NextMessage,
     Categories,
+    Cancel(usize),
+    RefreshMessage(usize)
 }
 
 impl From<Message> for MainMessage {
@@ -88,6 +90,15 @@ impl MainScreen {
         match message {
             Message::Categories => {
                 return Task::done(MainMessage::SetScreen(super::Screen::Categories))
+            },
+            Message::Cancel(idx) => {
+                let message = &self.message_history[idx];
+                message.set_status(super::message_history::SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
+                return Task::done(SignalMessage::Cancel.into());
+            },
+            Message::RefreshMessage(idx) => {
+                let message = &self.message_history[idx];
+                message.set_status(super::message_history::SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
             },
             Message::SetRegisterUrl(url) => {
                 let url = url.as_ref();

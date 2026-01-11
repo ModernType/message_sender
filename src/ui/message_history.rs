@@ -3,7 +3,7 @@ use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}
 use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
 use wacore_binary::jid::Jid;
 
-use crate::{message::SendMode, messangers::Key};
+use crate::{message::SendMode, messangers::Key, ui::icons};
 
 #[derive(Debug)]
 pub struct SendMessageInfo {
@@ -258,14 +258,25 @@ impl SendMessageInfo {
                         svg(svg::Handle::from_memory(include_bytes!("icons/delete.svg")))
                     )
                     .style(button::danger)
-                    .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::DeleteMessage(idx)))
+                    .on_press_maybe(match status {
+                        SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
+                        SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
+                        _ => None,
+                    })
                 )
                 .push(
                     button(
-                        svg(svg::Handle::from_memory(include_bytes!("icons/edit.svg")))
+                        svg(match status {
+                            SendStatus::Pending | SendStatus::Sending | SendStatus::Failed => svg::Handle::from_memory(icons::REFRESH),
+                            _ => svg::Handle::from_memory(icons::EDIT)
+                        })
                     )
                     .style(button::secondary)
-                    .on_press_maybe({status == SendStatus::Sent}.then_some(super::main_screen::Message::EditMessage(idx)))
+                    .on_press_maybe(match status {
+                        SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
+                        SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
+                        _ => None,
+                    })
                 )
             )
         )

@@ -1,6 +1,6 @@
-use std::{net::TcpStream, sync::Arc, time::{Duration, SystemTime}};
+use std::{collections::VecDeque, net::TcpStream, sync::Arc, time::{Duration, SystemTime}};
 
-use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
+use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}, future::abortable, stream::AbortHandle};
 use log::{info, warn};
 use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, EditMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
@@ -17,33 +17,45 @@ pub enum SignalMessage {
     // GetGroups,
     SendMessage(Manager, Arc<SendMessageInfo>, bool, bool),
     DeleteMessage(Manager, Arc<SendMessageInfo>),
-    EditMessage(Manager, Arc<SendMessageInfo>, Vec<u64>, bool)
+    EditMessage(Manager, Arc<SendMessageInfo>, Vec<u64>, bool),
+    Cancel,
+    Finished,
 }
 
 pub struct SignalWorker {
     signal_reciever: UnboundedReceiver<SignalMessage>,
     ui_message_sender: UnboundedSender<crate::ui::Message>,
-
+    message_queue: VecDeque<SignalMessage>,
+    abort_handle: Option<AbortHandle>,
+    signal_sender: UnboundedSender<SignalMessage>
 }
 
 impl SignalWorker {
     pub fn new(
         signal_reciever: UnboundedReceiver<SignalMessage>,
-        ui_message_sender: UnboundedSender<crate::ui::Message>
+        ui_message_sender: UnboundedSender<crate::ui::Message>,
+        signal_sender: UnboundedSender<SignalMessage>
     ) -> Self {
-        Self { signal_reciever, ui_message_sender }
+        Self {
+            signal_reciever,
+            ui_message_sender,
+            signal_sender,
+            message_queue: VecDeque::new(),
+            abort_handle: None,
+        }
     }
 
     pub fn spawn_new(
         signal_reciever: UnboundedReceiver<SignalMessage>,
-        ui_message_sender: UnboundedSender<crate::ui::Message>
+        ui_message_sender: UnboundedSender<crate::ui::Message>,
+        signal_sender: UnboundedSender<SignalMessage>
     ) {
         std::thread::Builder::new().stack_size(8 * 1024 * 1024).spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("No runtime must be built");
-            let worker = Self::new(signal_reciever, ui_message_sender);
+            let worker = Self::new(signal_reciever, ui_message_sender, signal_sender);
             let local = LocalSet::new();
             local.spawn_local(worker.future());
             rt.block_on(local)
@@ -63,19 +75,79 @@ impl SignalWorker {
                 SignalMessage::Sync(mng) => {
                     _ = tokio::task::spawn_local(sync(ui_message_sender.clone(), mng));
                 },
-                SignalMessage::SendMessage(manager, message, markdown, parallel) => {
-                    send_message(ui_message_sender.clone(), manager, message, markdown, parallel).await;
+                SignalMessage::Cancel => {
+                    if let Some(handle) = self.abort_handle.take() {
+                        handle.abort();
+                    }
+                    if let Some(message) = self.message_queue.pop_front() {
+                        let handle = self.execute_task(message);
+                        self.abort_handle = Some(handle);
+                    }
                 },
-                SignalMessage::DeleteMessage(manager, message) => {
-                    delete_message(ui_message_sender.clone(), manager, message).await;
+                SignalMessage::Finished => {
+                    self.abort_handle = None;
+                    if let Some(message) = self.message_queue.pop_front() {
+                        let handle = self.execute_task(message);
+                        self.abort_handle = Some(handle);
+                    }
                 },
-                SignalMessage::EditMessage(manager, message, timestamps, markdown) => {
-                    _ = edit_message(ui_message_sender.clone(), manager, message, timestamps, markdown).await;
-                }
+                message => {
+                    if self.abort_handle.is_none() {
+                        let handle = self.execute_task(message);
+                        self.abort_handle = Some(handle);
+                    }
+                    else {
+                        self.message_queue.push_back(message);
+                    }
+                },
             };
+
+
         }
     }
+
+    fn execute_task(&self, message: SignalMessage) -> AbortHandle {
+        let ui_message_sender = self.ui_message_sender.clone();
+        let mut finish_send = self.signal_sender.clone();
+        let (task, handle) = match message {
+            SignalMessage::SendMessage(manager, message, markdown, parallel) => {
+                let (fut, handle) = abortable(send_message(ui_message_sender, manager, message, markdown, parallel));
+                (
+                    Box::pin(async move {
+                        fut.await;
+                        _ = finish_send.send(SignalMessage::Finished).await;
+                    }) as std::pin::Pin<Box<dyn Future<Output = ()>>>,
+                    handle
+                )
+            },
+            SignalMessage::DeleteMessage(manager, message) => {
+                let (fut, handle) = abortable(delete_message(ui_message_sender, manager, message));
+                (
+                    Box::pin(async move {
+                        fut.await;
+                        _ = finish_send.send(SignalMessage::Finished).await;
+                    }) as std::pin::Pin<Box<dyn Future<Output = ()>>>,
+                    handle
+                )
+            },
+            SignalMessage::EditMessage(manager, message, timestamps, markdown) => {
+                let (fut, handle) = abortable(edit_message(ui_message_sender, manager, message, timestamps, markdown));
+                (
+                    Box::pin(async move {
+                        fut.await;
+                        _ = finish_send.send(SignalMessage::Finished).await;
+                    }) as std::pin::Pin<Box<dyn Future<Output = ()>>>,
+                    handle
+                )
+            },
+            _m => panic!("Other messages should not be here!")
+        };
+    
+        _ = tokio::task::spawn_local(task);
+        handle
+    }
 }
+
 
 async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     let store = SqliteStore::open_with_options(
@@ -254,7 +326,7 @@ async fn send_message_inner(
     markdown: bool,
 ) -> anyhow::Result<()> {
     let mut message = if markdown {
-        let (message, ranges) = crate::message::parse_message_with_format(message)?;
+        let (message, ranges) = crate::message::parse_message_with_format(message).unwrap_or_else(|_| (message.to_owned(), Vec::new()));
         let message = if let SendMode::Frequency = group.send_mode && let Some(freq) = freq {
             format!("{}\n{}", freq, message)
         }
@@ -361,7 +433,7 @@ async fn edit_message(
     message: Arc<SendMessageInfo>,
     timestamps: Vec<u64>,
     markdown: bool,
-) -> anyhow::Result<()> {
+) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
     for (group, timestamp) in message.groups_signal.iter().zip(timestamps) {
@@ -372,7 +444,7 @@ async fn edit_message(
         let freq = message.freq.as_ref();
 
         let mut data_message = if markdown {
-            let (message, ranges) = crate::message::parse_message_with_format(&message.content)?;
+            let (message, ranges) = crate::message::parse_message_with_format(&message.content).unwrap_or_else(|_| (message.content.clone(), Vec::new()));
             DataMessage {
                 body: Some(if let SendMode::Frequency = group.send_mode && let Some(freq) = freq {
                     format!("{}\n{}", freq, message)
@@ -430,7 +502,6 @@ async fn edit_message(
 
     message.set_status(SendStatus::Sent, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-    Ok(())
 }
 
 fn send_ui_message(

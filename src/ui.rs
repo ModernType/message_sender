@@ -225,7 +225,7 @@ impl App {
             }
             Message::SetupSignalWorker(tx) => {
                 let (task_tx, task_rx) = futures::channel::mpsc::unbounded();
-                SignalWorker::spawn_new(task_rx, tx.clone());
+                SignalWorker::spawn_new(task_rx, tx.clone(), task_tx.clone());
                 self.signal_task_send = Some(task_tx);
                 whatsapp::UI_MESSAGE_SENDER.set(tx.clone()).unwrap();
 

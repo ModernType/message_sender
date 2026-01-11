@@ -12,4 +12,5 @@ icon!(WHASTAPP, "icons/whatsapp.svg");
 icon!(DROP_DOWN, "icons/drop_down.svg");
 icon!(DROP_UP, "icons/drop_up.svg");
 icon!(ARROW_BACK, "icons/arrow_back.svg");
+icon!(REFRESH, "icons/refresh.svg");
 
