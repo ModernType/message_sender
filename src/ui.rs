@@ -362,7 +362,10 @@ impl App {
                 }
             },
             Message::RecivedNetworks(networks) => {
-                self.data.networks.extend(networks);
+                for cat in self.data.categories.iter_mut() {
+                    cat.networks.retain(|id| networks.contains_key(id));
+                }
+                self.data.networks = networks;
                 Task::done(Message::Notification("Нові мережі додані!".to_owned()))
             },
             Message::None => Task::done(main_screen::Message::UpdateMessageHistory.into()),
