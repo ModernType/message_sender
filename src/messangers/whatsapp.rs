@@ -159,8 +159,6 @@ pub async fn edit_message(client: Arc<Client>, message: Arc<SendMessageInfo>, me
 
 pub async fn delete_message(client: Arc<Client>, message: Arc<SendMessageInfo>) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-    
-    send_ui_message(ui::Message::Notification("Повідомлення не буде видалене у Whatsapp".to_owned())).await;
 
     for group in message.groups_whatsapp.iter() {
         if let Some(id) = group.message_id() {
