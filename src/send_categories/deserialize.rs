@@ -27,8 +27,8 @@ impl NetworkInfo {
         Self {
             id, 
             name,
-            crypt_mode: String::new(),
             freq: String::new(),
+            crypt_mode: String::new(),
         }
     }
 }
@@ -39,7 +39,7 @@ impl From<FullNetworkInfo> for NetworkInfo {
             id: value.id,
             freq: value.frequency_str,
             crypt_mode: value.crypt_mode_str,
-            name: value.network_name,
+            name: format!("{} ({})", value.network_name, value.source_location),
         }
     }
 }
