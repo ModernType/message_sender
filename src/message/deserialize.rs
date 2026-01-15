@@ -7,17 +7,17 @@ use derive_more::Display;
 use serde::Deserialize;
 
 #[derive(Deserialize, Display, Debug, Default)]
-#[serde(from = "MessageOuter", bound = "'de: 'a", default)]
-pub struct Message<'a>(pub MessageInner<'a>);
+#[serde(from = "MessageOuter", default)]
+pub struct Message(pub MessageInner);
 
-impl<'a> From<MessageOuter<'a>> for Message<'a> {
-    fn from(value: MessageOuter<'a>) -> Self {
+impl From<MessageOuter> for Message {
+    fn from(value: MessageOuter) -> Self {
         Self(value.message)
     }
 }
 
-impl<'a> Deref for Message<'a> {
-    type Target = MessageInner<'a>;
+impl Deref for Message {
+    type Target = MessageInner;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -26,44 +26,44 @@ impl<'a> Deref for Message<'a> {
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(default)]
-pub struct MessageInner<'a> {
+pub struct MessageInner {
     pub message: MessageGroup,
-    pub comment: Option<&'a str>,
+    pub comment: Option<String>,
     #[serde(rename = "rUser")]
     pub reciever: Name,
     #[serde(rename = "tUser")]
     pub sender: Name,
-    pub datetime: &'a str,
-    pub frequency: &'a str,
-    pub location: &'a str,
-    pub title: &'a str,
+    pub datetime: String,
+    pub frequency: String,
+    pub location: String,
+    pub title: String,
     #[serde(rename = "source")]
-    pub _source: &'a str,
+    pub _source: String,
     #[serde(rename = "radionetworkID")]
     pub network_id: Option<u64>,
 }
 
-impl<'a> Message<'a> {
+impl Message {
     pub fn with_frequency(&self) -> String {
         format!("{}\n{}", self.0.frequency, self)
     }
 }
 
-impl<'a> Display for MessageInner<'a> {
+impl Display for MessageInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.title)?;
+        f.write_str(&self.title)?;
         f.write_char('\n')?;
-        f.write_str(self.location)?;
+        f.write_str(&self.location)?;
         f.write_char('\n')?;
         f.write_char('\n')?;
-        f.write_str(self.datetime)?;
+        f.write_str(&self.datetime)?;
         f.write_char('\n')?;
         f.write_char('\n')?;
         writeln!(f, "Отримувач: {}", self.reciever)?;
         writeln!(f, "Відправник: {}", self.sender)?;
         f.write_char('\n')?;
         write!(f, "{}", self.message)?;
-        if let Some(comment) = self.comment && !comment.is_empty() {
+        if let Some(comment) = &self.comment && !comment.is_empty() {
             f.write_char('\n')?;
             write!(f, "Коментар: {}", comment)?;
         }
@@ -72,11 +72,11 @@ impl<'a> Display for MessageInner<'a> {
 }
 
 #[derive(Deserialize, Default)]
-struct MessageOuter<'a> {
+struct MessageOuter {
     #[serde(rename = "Key")]
-    _freq: &'a str,
+    _freq: String,
     #[serde(rename = "Value")]
-    message: MessageInner<'a>,
+    message: MessageInner,
 }
 
 #[derive(Deserialize, Debug,Default)]

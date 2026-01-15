@@ -69,7 +69,7 @@ pub struct AcceptedMessage {
     pub autosend_overwrite: bool,
 }
 
-impl From<OperatorMessage<'_>> for AcceptedMessage {
+impl From<OperatorMessage> for AcceptedMessage {
     fn from(value: OperatorMessage) -> Self {
         let freq = Some(value.0.frequency.to_string());
 
