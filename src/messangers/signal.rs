@@ -1,14 +1,26 @@
 use std::{collections::VecDeque, net::TcpStream, sync::Arc, time::{Duration, SystemTime}};
 
-use futures::{SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}, future::abortable, stream::AbortHandle};
+use futures::{FutureExt, SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
 use log::{info, warn};
 use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, EditMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
-use tokio::task::LocalSet;
+use tokio::task::{AbortHandle, LocalSet};
 
 use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}}};
 
 type Manager = presage::Manager<SqliteStore, Registered>;
+
+/// This macro wraps any future, attaches finish sending message, starts its execution and returns abort handle
+macro_rules! message_task {
+    ($e:expr, $finish_send:ident) => {
+        {
+            let handle = tokio::task::spawn_local(
+                $e.then(move |_| async move { $finish_send.send(SignalMessage::Finished).await.unwrap(); })
+            );
+            handle.abort_handle()
+        }
+    };
+}
 
 #[derive(Debug, Clone)]
 pub enum SignalMessage {
@@ -109,42 +121,14 @@ impl SignalWorker {
     fn execute_task(&self, message: SignalMessage) -> AbortHandle {
         let ui_message_sender = self.ui_message_sender.clone();
         let mut finish_send = self.signal_sender.clone();
-        let (task, handle) = match message {
-            SignalMessage::SendMessage(manager, message, markdown, parallel) => {
-                let (fut, handle) = abortable(send_message(ui_message_sender, manager, message, markdown, parallel));
-                (
-                    Box::pin(async move {
-                        fut.await;
-                        _ = finish_send.send(SignalMessage::Finished).await;
-                    }) as std::pin::Pin<Box<dyn Future<Output = ()>>>,
-                    handle
-                )
-            },
-            SignalMessage::DeleteMessage(manager, message) => {
-                let (fut, handle) = abortable(delete_message(ui_message_sender, manager, message));
-                (
-                    Box::pin(async move {
-                        fut.await;
-                        _ = finish_send.send(SignalMessage::Finished).await;
-                    }) as std::pin::Pin<Box<dyn Future<Output = ()>>>,
-                    handle
-                )
-            },
-            SignalMessage::EditMessage(manager, message, timestamps, markdown) => {
-                let (fut, handle) = abortable(edit_message(ui_message_sender, manager, message, timestamps, markdown));
-                (
-                    Box::pin(async move {
-                        fut.await;
-                        _ = finish_send.send(SignalMessage::Finished).await;
-                    }) as std::pin::Pin<Box<dyn Future<Output = ()>>>,
-                    handle
-                )
-            },
+        let abort_handle = match message {
+            SignalMessage::SendMessage(manager, message, markdown, parallel) => message_task!(send_message(ui_message_sender, manager, message, markdown, parallel), finish_send),
+            SignalMessage::DeleteMessage(manager, message) => message_task!(delete_message(ui_message_sender, manager, message), finish_send),
+            SignalMessage::EditMessage(manager, message, timestamps, markdown) => message_task!(edit_message(ui_message_sender, manager, message, timestamps, markdown), finish_send),
             _m => panic!("Other messages should not be here!")
         };
     
-        _ = tokio::task::spawn_local(task);
-        handle
+        abort_handle
     }
 }
 
@@ -237,22 +221,26 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
 }
 
 async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut manager: Manager) -> anyhow::Result<()> {
-    let reciever = manager.receive_messages().await?;
-    let mut reciever = Box::pin(reciever);
-    while let Some(msg) = reciever.next().await {
-        match msg {
-            presage::model::messages::Received::Contacts => {
-                info!("Got contacts");
-            }
-            presage::model::messages::Received::Content(_) => {
-                info!("Got message");
-            }
-            presage::model::messages::Received::QueueEmpty => {
-                msg_send_channel.send(crate::ui::Message::Synced).await.unwrap();
+    loop {
+        let reciever = manager.receive_messages().await?;
+        let mut reciever = Box::pin(reciever);
+        while let Some(msg) = reciever.next().await {
+            match msg {
+                presage::model::messages::Received::Contacts => {
+                    info!("Got contacts");
+                }
+                presage::model::messages::Received::Content(_) => {
+                    info!("Got message");
+                }
+                presage::model::messages::Received::QueueEmpty => {
+                    msg_send_channel.send(crate::ui::Message::Synced).await.unwrap();
+                }
             }
         }
+        log::error!("Sync suspended");
     }
-    log::error!("Sync suspended");
+
+    #[allow(unreachable_code)]
     Ok(())
 }
 
