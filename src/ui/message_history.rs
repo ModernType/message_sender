@@ -1,6 +1,6 @@
 use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
 
-use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, space, svg, text}};
+use iced::{Alignment, Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
 use wacore_binary::jid::Jid;
 
 use crate::{message::SendMode, messangers::Key, ui::icons};
@@ -192,6 +192,7 @@ impl SendMessageInfo {
             Row::new()
             .spacing(5)
             .padding(5)
+            .align_y(Alignment::Center)
             .push(
                 Column::new()
                 .spacing(5)

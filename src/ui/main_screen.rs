@@ -465,7 +465,7 @@ impl MainScreen {
             },
             ..scrollable::default(theme, status)
         })
-        .width(Length::FillPortion(5))
+        .width(Length::Fill)
         .height(Length::Fill)
         .into()
     }
@@ -672,7 +672,7 @@ impl MainScreen {
         .spacing(7)
         .push(
             Column::new()
-            .width(Length::FillPortion(2))
+            .width(250)
             .spacing(20)
             .padding(10)
             .align_x(Horizontal::Center)
