@@ -1,6 +1,6 @@
 use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
 
-use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
+use iced::{Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, space, svg, text}};
 use wacore_binary::jid::Jid;
 
 use crate::{message::SendMode, messangers::Key, ui::icons};
@@ -183,79 +183,85 @@ impl SendMessageInfo {
             0 => Some(iced::Color::from_rgb(0.3, 0.3, 0.3)),
             1 => None,
             2 => Some(iced::Color::from_rgb(0.0, 0.6, 0.0)),
-            3 | 4=> Some(iced::Color::from_rgb(0.6, 0.0, 0.0)),
+            3 | 4 => Some(iced::Color::from_rgb(0.6, 0.0, 0.0)),
             _ => unreachable!("You should not use values outside of `SendStatus` enum"),
         };
         let sent_count = self.sent_count();
         let status = SendStatus::from(self.status.load(Ordering::Relaxed));
         container(
-            Column::new()
+            Row::new()
             .spacing(5)
             .padding(5)
             .push(
-                text(
-                    self.content.lines()
-                    .filter(|l| l.len() > 3)
-                    .take(3)
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                Column::new()
+                .spacing(5)
+                .padding(5)
+                .push(
+                    text(
+                        self.content.lines()
+                        .filter(|l| l.len() > 1)
+                        .take(3)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                    )
+                    .center()
+                    .wrapping(text::Wrapping::None)
+                    .size(14)
+                    .width(Length::Fill)
                 )
-                .center()
-                .wrapping(text::Wrapping::None)
-                .size(12)
-                .width(Length::Fill)
-            )
-            .push(
-                match status {
-                    SendStatus::Pending => Element::from(
-                        text("Pending...")
-                        .color(status_color.unwrap())
-                        .font(iced::Font { style: iced::font::Style::Italic, ..Default::default() })
-                        .center()
-                        .width(Length::Fill)
-                    ),
-                    SendStatus::Deleted if sent_count == 0 => Element::from(
-                        text("Видалено")
-                        .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().danger.base.color) })
-                        .center()
-                        .width(Length::Fill)
-                    ),
-                    SendStatus::Sent if sent_count == self.len() => Element::from(
-                        text("Відправлено")
-                        .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) })
-                        .center()
-                        .width(Length::Fill)
-                    ),
-                    _ => Element::from(
-                        Column::new()
-                        .push(
-                            text(format!("{}/{}", sent_count, self.groups_signal.len() + self.groups_whatsapp.len()))
-                            .color_maybe(status_color)
+                .push(
+                    match status {
+                        SendStatus::Pending => Element::from(
+                            text("Pending...")
+                            .color(status_color.unwrap())
+                            .font(iced::Font { style: iced::font::Style::Italic, ..Default::default() })
                             .center()
                             .width(Length::Fill)
+                        ),
+                        SendStatus::Deleted if sent_count == 0 => Element::from(
+                            text("Видалено")
+                            .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().danger.base.color) })
+                            .center()
+                            .width(Length::Fill)
+                        ),
+                        SendStatus::Sent if sent_count == self.len() => Element::from(
+                            text("Відправлено")
+                            .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) })
+                            .center()
+                            .width(Length::Fill)
+                        ),
+                        _ => Element::from(
+                            Column::new()
+                            .push(
+                                text(format!("{}/{}", sent_count, self.groups_signal.len() + self.groups_whatsapp.len()))
+                                .color_maybe(status_color)
+                                .center()
+                                .width(Length::Fill)
+                            )
+                            .push(
+                                progress_bar(0.0 ..= (self.groups_signal.len() + self.groups_whatsapp.len()) as f32, sent_count as f32)
+                                .length(Length::Fill)
+                                .girth(5)
+                                .style(move |theme: &Theme| {
+                                    let palette = theme.extended_palette();
+                                    progress_bar::Style {
+                                        bar: status_color.map(iced::Background::Color).unwrap_or_else(|| palette.background.base.text.into()),
+                                        background: palette.background.base.color.into(),
+                                        border: Border::default().rounded(2.5),
+                                    }
+                                })
+                            )
                         )
-                        .push(
-                            progress_bar(0.0 ..= (self.groups_signal.len() + self.groups_whatsapp.len()) as f32, sent_count as f32)
-                            .length(Length::Fill)
-                            .girth(5)
-                            .style(move |theme: &Theme| {
-                                let palette = theme.extended_palette();
-                                progress_bar::Style {
-                                    bar: status_color.map(iced::Background::Color).unwrap_or_else(|| palette.background.base.text.into()),
-                                    background: palette.background.base.color.into(),
-                                    border: Border::default().rounded(2.5),
-                                }
-                            })
-                        )
-                    )
-                }
+                    }
+                )
             )
             .push(
-                Row::new()
+                Column::new()
                 .spacing(3)
                 .push(
                     button(
                         svg(svg::Handle::from_memory(include_bytes!("icons/delete.svg")))
+                        .width(Length::Shrink)
                     )
                     .style(button::danger)
                     .on_press_maybe(match status {
@@ -270,6 +276,7 @@ impl SendMessageInfo {
                             SendStatus::Pending | SendStatus::Sending | SendStatus::Failed => svg::Handle::from_memory(icons::REFRESH),
                             _ => svg::Handle::from_memory(icons::EDIT)
                         })
+                        .width(Length::Shrink)
                     )
                     .style(button::secondary)
                     .on_press_maybe(match status {

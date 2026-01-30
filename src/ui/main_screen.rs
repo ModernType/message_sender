@@ -54,7 +54,7 @@ pub(super) struct MainScreen {
     pub whatsapp_state: LinkState,
     message_content: text_editor::Content,
     pub message_history: VecDeque<Arc<SendMessageInfo>>,
-    pub show_message_history: Animation<bool>,
+    pub show_side_bar: Animation<bool>,
     pub edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
     show_signal_groups: bool,
@@ -72,8 +72,8 @@ impl MainScreen {
             whatsapp_state: Default::default(),
             message_content: Default::default(),
             message_history: Default::default(),
-            show_message_history: Animation::new(false)
-                .duration(Duration::from_millis(300))
+            show_side_bar: Animation::new(false)
+                .quick()
                 .easing(iced::animation::Easing::EaseInOut),
             edit: None,
             now: Instant::now(),
@@ -106,12 +106,14 @@ impl MainScreen {
                     qr_code::Data::new(url).unwrap()
                 );
                 self.signal_state = LinkState::Linking;
+                self.show_side_bar.go_mut(true, now);
             },
             Message::SetWhatsappUrl(data) => {
                 self.whatsapp_url = Some(
                     qr_code::Data::new(data.as_bytes()).unwrap()
                 );
                 self.whatsapp_state = LinkState::Linking;
+                self.show_side_bar.go_mut(true, now);
             },
             Message::SetWhatsappState(state) => {
                 self.whatsapp_state = state;
@@ -241,12 +243,13 @@ impl MainScreen {
                 return Task::done(MainMessage::SetScreen(super::Screen::Settings));
             },
             Message::ShowMessageHistory(state) => {
-                self.show_message_history.go_mut(state, self.now);
+                self.show_side_bar.go_mut(state, self.now);
             },
             Message::DeleteMessage(idx) => {
                 return Task::done(MainMessage::DeleteMessage(Arc::clone(&self.message_history[idx])))
             },
             Message::EditMessage(idx) => {
+                self.show_side_bar.go_mut(true, now);
                 match self.edit {
                     Some(ref mut editing_message) => {
                         std::mem::swap(
@@ -272,9 +275,11 @@ impl MainScreen {
                 self.message_history.push_front(
                     self.edit.take().unwrap()
                 );
+                self.show_side_bar.go_mut(false, now);
             },
             Message::ConfirmEdit => {
                 let mut arc_message = self.edit.take().unwrap();
+                // We are making it mut, because we know that it already finished sending and is available only in `self.edit`
                 let message = Arc::get_mut(&mut arc_message).unwrap();
                 
                 let timestamps = message.groups_signal.iter().map(|group| group.timestamp.swap(0, std::sync::atomic::Ordering::Relaxed)).collect();
@@ -295,6 +300,8 @@ impl MainScreen {
                     self.message_history.pop_back();
                 }
                 self.message_history.push_front(arc_message.clone());
+
+                self.show_side_bar.go_mut(false, now);
 
                 return Task::done(MainMessage::EditMessage(arc_message, timestamps, whatsapp_ids));
             },
@@ -437,11 +444,38 @@ impl MainScreen {
     }
 
     fn message_history(&self) -> Element<'_, Message> {
+        scrollable(
+            self.message_history.iter().enumerate().fold(
+                Column::new()
+                .padding(10)
+                .spacing(3)
+                .width(Length::Fill)
+                .height(Length::Fill),
+                |col, (idx, message_info)| {
+                    col.push(
+                        message_info.view(idx)
+                    )
+                }
+            )
+        )
+        .style(|theme, status| scrollable::Style {
+            container: container::Style {
+                background: Some(theme.extended_palette().background.weaker.color.into()),
+                ..Default::default()
+            },
+            ..scrollable::default(theme, status)
+        })
+        .width(Length::FillPortion(5))
+        .height(Length::Fill)
+        .into()
+    }
+
+    fn side_bar(&self, message_file: bool) -> Element<'_, Message> {
         Element::new(
             Row::new()
             .align_y(Alignment::Center)
             .push(
-                button(text(if self.show_message_history.value() { ">" } else { "<" }).center())
+                button(text(if self.show_side_bar.value() { ">" } else { "<" }).center())
                 .height(80)
                 .style(|theme: &iced::Theme, button_status| {
                     let palette = theme.extended_palette();
@@ -463,47 +497,25 @@ impl MainScreen {
                         ..Default::default()
                     }
                 })
-                .on_press(Message::ShowMessageHistory(!self.show_message_history.value()))   
+                .on_press(Message::ShowMessageHistory(!self.show_side_bar.value()))   
             )
             .push(
-                scrollable(
-                    self.message_history.iter().enumerate().fold(
-                        Column::new()
-                        .padding(10)
-                        .spacing(3)
-                        .width(Length::Fill)
-                        .height(Length::Fill),
-                        |col, (idx, message_info)| {
-                            col.push(
-                                message_info.view(idx)
-                            )
-                        }
-                    )
-                )
-                .style(|theme, status| scrollable::Style {
-                    container: container::Style {
-                        background: Some(theme.extended_palette().background.weaker.color.into()),
-                        ..Default::default()
-                    },
-                    ..scrollable::default(theme, status)
-                })
-                .width(self.show_message_history.interpolate(0., 250., self.now))
-                .height(Length::Fill)
+                self.main_part(message_file)
             )
             .height(Length::Fill)
             .width(Length::Shrink)
         )
     }
 
-    fn main_part(&self, autosend: bool, message_file: bool) -> Element<'_, Message> {
-        let col = Column::new()
-        .width(Length::FillPortion(6))
+    fn main_part(&self, message_file: bool) -> Element<'_, Message> {
+        let mut col = Column::new()
+        .width(self.show_side_bar.interpolate(0., 450., self.now))
         .height(Length::Fill)
         .align_x(Horizontal::Center)
         .spacing(10)
         .padding(10);
         
-        if self.register_url.is_some() || self.whatsapp_url.is_some() {
+        col = if self.register_url.is_some() || self.whatsapp_url.is_some() {
             col.push_maybe(
                 self.register_url.as_ref().map(
                     |data| responsive(
@@ -546,7 +558,6 @@ impl MainScreen {
                     )
                 )
             )
-            .into()
         }
         else {
             col.push(
@@ -647,12 +658,13 @@ impl MainScreen {
                     )
                 }
             )
-            .push(
-                checkbox(autosend)
-                .label("Автоматична відправка")
-                .on_toggle(Message::SetAutoSend)
-            ).into()
-        }
+        };
+
+        container(col)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|theme: &iced::Theme| container::background(theme.extended_palette().background.weaker.color))
+        .into()
     }
 
     pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
@@ -769,10 +781,10 @@ impl MainScreen {
             )
         )
         .push(
-            self.main_part(data.autosend, data.message_file)
+            self.message_history()
         )
         .push(
-            self.message_history()
+            self.side_bar(data.message_file)
         )
         .into()
     }

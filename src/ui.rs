@@ -400,7 +400,7 @@ impl App {
     }
 
     pub fn is_animating(&self) -> bool {
-        self.main_scr.show_message_history.is_animating(self.now) ||
+        self.main_scr.show_side_bar.is_animating(self.now) ||
         self.notification.is_animating(self.now)
     }
 
