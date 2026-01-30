@@ -1,6 +1,6 @@
 #![feature(string_remove_matches)]
 
-use std::{fs::File, sync::Arc};
+use std::{fs::File, panic::PanicHookInfo, sync::Arc};
 use tracing::level_filters::LevelFilter;
 
 use crate::ui::App;
@@ -13,6 +13,14 @@ mod send_categories;
 #[cfg(test)]
 mod test;
 
+fn panic_message_box(info: &PanicHookInfo) {
+    rfd::MessageDialog::new()
+    .set_buttons(rfd::MessageButtons::Ok)
+    .set_title("Виявлена критична помилка")
+    .set_level(rfd::MessageLevel::Error)
+    .set_description(info.to_string())
+    .show();
+}
 
 fn main() {
     let log_file = File::create("sender.log").unwrap();
@@ -20,6 +28,8 @@ fn main() {
     let log_filter = LevelFilter::INFO;
     #[cfg(not(debug_assertions))]
     let log_filter = LevelFilter::WARN;
+
+    std::panic::set_hook(Box::new(panic_message_box));
 
 
     tracing_subscriber::FmtSubscriber::builder()
