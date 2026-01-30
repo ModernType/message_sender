@@ -1,7 +1,7 @@
 #![feature(string_remove_matches)]
 
-use std::fs::File;
-use simplelog::Config;
+use std::{fs::File, sync::Arc};
+use tracing::level_filters::LevelFilter;
 
 use crate::ui::App;
 
@@ -17,20 +17,17 @@ mod test;
 fn main() {
     let log_file = File::create("sender.log").unwrap();
     #[cfg(debug_assertions)]
-    let log_filter = log::LevelFilter::Info;
+    let log_filter = LevelFilter::INFO;
     #[cfg(not(debug_assertions))]
-    let log_filter = log::LevelFilter::Warn;
+    let log_filter = LevelFilter::WARN;
 
-    simplelog::CombinedLogger::init(vec![
-        simplelog::TermLogger::new(
-            log_filter,
-            Config::default(),
-            simplelog::TerminalMode::Mixed,
-            simplelog::ColorChoice::Auto,
-        ),
-        simplelog::WriteLogger::new(log_filter, Config::default(), log_file),
-    ])
-    .unwrap();
+
+    tracing_subscriber::FmtSubscriber::builder()
+    .pretty()
+    .with_max_level(log_filter)
+    .with_writer(log_file)
+    .with_writer(Arc::new(std::io::stdout()))
+    .init();
 
     iced::application::timed(
         App::new,

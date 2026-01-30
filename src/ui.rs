@@ -326,7 +326,6 @@ impl App {
                 iced::exit()
             }
             Message::Notification(e) => {
-                log::warn!("{e}");
                 self.notification.set_text(e);
                 self.notification.show(now);
                 Task::perform(tokio::time::sleep(Duration::from_millis(NOTIFICATION_SHOW_TIME)), |_| Message::NotificationClose)
