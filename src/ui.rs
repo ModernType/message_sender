@@ -2,7 +2,7 @@ use std::{
     collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Alignment, Animation, Border, Element, Length, Padding, Subscription, Task, animation::Easing, keyboard, widget::{Stack, container, text}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Stack, container, text}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use ron::ser::PrettyConfig;
@@ -500,7 +500,6 @@ impl Notification {
     pub fn new() -> Self {
         Self {
             text: String::new(),
-            // open: false,
             open: Animation::new(false)
                   .very_quick()
                   .easing(Easing::EaseInOut)
@@ -517,17 +516,14 @@ impl Notification {
 
     pub fn is_open(&self) -> bool {
         self.open.value()
-        // self.open
     }
 
     pub fn show(&mut self, now: Instant) {
         self.open.go_mut(true, now);
-        // self.open = true;
     }
 
     pub fn close(&mut self, now: Instant) {
         self.open.go_mut(false, now);
-        // self.open = false;
     }
 
     pub fn view(&self, now: Instant) -> Element<'_, Message> {
@@ -540,13 +536,13 @@ impl Notification {
             )
             .padding(Padding::ZERO.horizontal(10))
             .height(self.open.interpolate(0.0, 40.0, now))
-            // .height(if self.open { 40 } else { 0 })
             .width(Length::Fill)
             .style(|theme: &iced::Theme| {
                 let palette = theme.palette();
                 container::Style { text_color: Some(palette.text),
                     background: Some(palette.background.lighter(0.25).into()),
                     border: Border::default().rounded(5),
+                    shadow: Shadow { color: Color { a: 0.1, ..Color::BLACK }, blur_radius: 5.0, offset: iced::Vector::ZERO },
                     ..Default::default()
                 }
             })

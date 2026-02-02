@@ -22,9 +22,11 @@ macro_rules! message_task {
     };
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum SignalMessage {
     LinkBegin,
+    Linked(Result<Manager, anyhow::Error>),
+    CancelLink,
     Sync(Manager),
     // GetGroups,
     SendMessage(Manager, Arc<SendMessageInfo>, bool, bool),
@@ -39,7 +41,8 @@ pub struct SignalWorker {
     ui_message_sender: UnboundedSender<crate::ui::Message>,
     message_queue: VecDeque<SignalMessage>,
     abort_handle: Option<AbortHandle>,
-    signal_sender: UnboundedSender<SignalMessage>
+    signal_sender: UnboundedSender<SignalMessage>,
+    link_abort: Option<AbortHandle>,
 }
 
 impl SignalWorker {
@@ -54,6 +57,7 @@ impl SignalWorker {
             signal_sender,
             message_queue: VecDeque::new(),
             abort_handle: None,
+            link_abort: None,
         }
     }
 
@@ -79,10 +83,21 @@ impl SignalWorker {
             let ui_message_sender = self.ui_message_sender.clone();
             match m {
                 SignalMessage::LinkBegin => {
-                    match link(ui_message_sender.clone()).await {
+                    let mut finish_send = self.signal_sender.clone();
+                    let handle = tokio::task::spawn_local(link(ui_message_sender.clone()).then(move |res| async move { finish_send.send(SignalMessage::Linked(res)).await.unwrap(); }));
+                    self.link_abort = Some(handle.abort_handle());
+                },
+                SignalMessage::Linked(mng_res) => {
+                    match mng_res {
                         Ok(mng) => send_ui_message(ui_message_sender.clone(), ui::Message::SetManager(mng)),
                         Err(_e) => send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Unlinked)),
                     }
+                },
+                SignalMessage::CancelLink => {
+                    if let Some(handle) = self.abort_handle.take() {
+                        handle.abort();
+                    }
+                    send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Unlinked))
                 },
                 SignalMessage::Sync(mng) => {
                     _ = tokio::task::spawn_local(sync(ui_message_sender.clone(), mng));

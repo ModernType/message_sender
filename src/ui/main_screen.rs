@@ -1,9 +1,9 @@
 use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}};
 
-use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo}};
+use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, Messanger, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -31,12 +31,12 @@ pub enum Message {
     EditMessage(usize),
     CancelEdit,
     ConfirmEdit,
-    ShowSignalGroups(bool),
-    ShowWhatsappGroups(bool),
+    ShowMessanger(Messanger),
     MessageFile,
     NextMessage,
     Categories,
     Cancel(usize),
+    CancelLink,
     RefreshMessage(usize)
 }
 
@@ -57,8 +57,7 @@ pub(super) struct MainScreen {
     pub show_side_bar: Animation<bool>,
     pub edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
-    show_signal_groups: bool,
-    show_whatsapp_groups: bool,
+    show_messanger: Messanger,
     pub message_queue: Vec<AcceptedMessage>,
     pub cur_message: Option<AcceptedMessage>
 }
@@ -77,8 +76,7 @@ impl MainScreen {
                 .easing(iced::animation::Easing::EaseInOut),
             edit: None,
             now: Instant::now(),
-            show_signal_groups: true,
-            show_whatsapp_groups: true,
+            show_messanger: Messanger::Signal,
             message_queue: Vec::new(),
             cur_message: None,
         }
@@ -95,6 +93,9 @@ impl MainScreen {
                 let message = &self.message_history[idx];
                 message.set_status(super::message_history::SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
                 return Task::done(SignalMessage::Cancel.into());
+            },
+            Message::CancelLink => {
+                return Task::done(SignalMessage::CancelLink.into())
             },
             Message::RefreshMessage(idx) => {
                 let message = &self.message_history[idx];
@@ -120,11 +121,17 @@ impl MainScreen {
                 if state != LinkState::Linking {
                     self.whatsapp_url = None;
                 }
+                if state == LinkState::Linked {
+                    data.whatsapp_logged = true;
+                }
             }
             Message::SetSignalState(state) => {
                 self.signal_state = state;
                 if state != LinkState::Linking {
                     self.register_url = None;
+                }
+                if state == LinkState::Linked {
+                    data.signal_logged = true;
                 }
             },
             Message::SetAutoSend(autosend) => {
@@ -220,6 +227,9 @@ impl MainScreen {
             Message::LinkBegin => {
                 return Task::done(SignalMessage::LinkBegin.into())
             },
+            Message::ShowMessanger(messanger) => {
+                self.show_messanger = messanger;
+            }
             Message::WhatsappLink => {
                 self.whatsapp_state = LinkState::Linking;
                 return Task::perform(whatsapp::start_whatsapp_task(), |_| MainMessage::None);
@@ -305,12 +315,6 @@ impl MainScreen {
 
                 return Task::done(MainMessage::EditMessage(arc_message, timestamps, whatsapp_ids));
             },
-            Message::ShowSignalGroups(show) => {
-                self.show_signal_groups = show;
-            },
-            Message::ShowWhatsappGroups(show) => {
-                self.show_whatsapp_groups = show;
-            },
             Message::NextMessage => {
                 self.cur_message = self.message_queue.pop();
                 if let Some(message) = &self.cur_message {
@@ -357,24 +361,9 @@ impl MainScreen {
         Task::none()
     }
 
-    fn group_list<'a>(&'a self, groups: &'a HashMap<Key, main_screen::Group>) -> Element<'a, Message> {
-        scrollable(
-            Column::new()
-            .spacing(3)
-            .push(
-                mouse_area(
-                    Row::new()
-                    .width(Length::Fill)
-                    .push(text("Signal").width(Length::Fill))
-                    .push(
-                        if self.show_signal_groups { icon!(arrow_drop_up).size(18) }
-                        else { icon!(arrow_drop_down).size(18) }
-                    )
-                )
-                .on_press(Message::ShowSignalGroups(!self.show_signal_groups))
-                .interaction(Interaction::Pointer)
-            )
-            .push_maybe(self.show_signal_groups.then(|| {
+    fn signal_list<'a>(&'a self, groups: &'a HashMap<Key, main_screen::Group>) -> Element<'a, Message> {
+        match self.signal_state {
+            LinkState::Linked => {
                 let mut groups = groups.iter()
                 .filter_map(|(key, group)| match key {
                     Key::Signal(key) => Some((key, group)),
@@ -382,7 +371,9 @@ impl MainScreen {
                 })
                 .collect::<Vec<_>>();
                 groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
+                let col = groups.into_iter().fold(
+                    Column::new().spacing(3).padding(10),
+                    |col, (key, group)| col.push(
                     checkbox(group.active())
                     .label(&group.title)
                     .on_toggle(move |_| Message::ToggleGroup(Key::Signal(*key), group.send_mode.next()))
@@ -396,22 +387,51 @@ impl MainScreen {
                             shaping: text::Shaping::Basic,
                         }
                     )
-                ))
-            }))
-            .push(
-                    mouse_area(
-                        Row::new()
-                        .width(Length::Fill)
-                        .push(text("Whatsapp").width(Length::Fill))
-                        .push(
-                            if self.show_whatsapp_groups { icon!(arrow_drop_up) }
-                            else { icon!(arrow_drop_down) }
-                        )
-                    )
-                    .on_press(Message::ShowWhatsappGroups(!self.show_whatsapp_groups))
-                    .interaction(Interaction::Pointer)
-            )
-            .push_maybe(self.show_whatsapp_groups.then(|| {
+                ));
+                scrollable(col)
+                .style(|theme, status| {
+                    let default = scrollable::default(theme, status);
+                    let palette = theme.extended_palette();
+
+                    scrollable::Style {
+                        container: container::Style {
+                            background: Some(palette.background.weaker.color.into()),
+                            text_color: Some(palette.background.weaker.text.into()),
+                            border: Border::default().rounded(Radius::default().bottom(15)),
+                            ..Default::default()
+                        },
+                        ..default
+                    }
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            },
+            LinkState::Linking => {
+                button(
+                    text("Відмінити")
+                    .width(Length::Fill)
+                    .center()
+                )
+                .style(button::subtle)
+                .on_press(Message::CancelLink)
+                .into()
+            },
+            LinkState::Unlinked => {
+                button(
+                    text("Приєднати пристрій")
+                    .width(Length::Fill)
+                    .center()
+                )
+                .on_press(Message::LinkBegin)
+                .into()
+            },
+        }
+    }
+
+    fn whatsapp_list<'a>(&'a self, groups: &'a HashMap<Key, main_screen::Group>) -> Element<'a, Message> {
+        match self.whatsapp_state {
+            LinkState::Linked => {
                 let mut groups = groups.iter()
                 .filter_map(|(key, group)| match key {
                     Key::Whatsapp(key) => Some((key, group)),
@@ -419,20 +439,104 @@ impl MainScreen {
                 })
                 .collect::<Vec<_>>();
                 groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
+                let col = groups.into_iter().fold(
+                    Column::new().spacing(3).padding(10),
+                    |col, (key, group)| col.push(
                     checkbox(group.active())
                     .label(&group.title)
                     .on_toggle(move |_| Message::ToggleGroup(Key::Whatsapp(key.clone()), group.send_mode.next()))
-                    .icon(checkbox::Icon {
-                        font: Font::with_name("Material Icons"),
-                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
-                                    else { '\u{e5ca}' },
-                        size: Some(Pixels::from(14)),
-                        line_height: text::LineHeight::default(),
-                        shaping: text::Shaping::Basic,
+                    .icon(
+                        checkbox::Icon {
+                            font: crate::ui::icons::FONT,
+                            code_point: if let SendMode::Frequency = group.send_mode { code_point!(graphic_eq) }
+                                        else { code_point!(check) },
+                            size: Some(Pixels::from(14)),
+                            line_height: text::LineHeight::default(),
+                            shaping: text::Shaping::Basic,
+                        }
+                    )
+                ));
+                scrollable(col)
+                .style(|theme, status| {
+                    let default = scrollable::default(theme, status);
+                    let palette = theme.extended_palette();
+
+                    scrollable::Style {
+                        container: container::Style {
+                            background: Some(palette.background.weaker.color.into()),
+                            text_color: Some(palette.background.weaker.text.into()),
+                            border: Border::default().rounded(Radius::default().bottom(15)),
+                            ..Default::default()
+                        },
+                        ..default
+                    }
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            },
+            LinkState::Linking => {
+                button(
+                    text("Відмінити")
+                    .width(Length::Fill)
+                    .center()
+                )
+                .style(button::subtle)
+                // .on_press(Message::CancelLink)
+                .into()
+            },
+            LinkState::Unlinked => {
+                button(
+                    text("Приєднати пристрій")
+                    .width(Length::Fill)
+                    .center()
+                )
+                .on_press(Message::WhatsappLink)
+                .into()
+            },
+        }
+    }
+
+    fn group_list<'a>(&'a self, groups: &'a HashMap<Key, main_screen::Group>) -> Element<'a, Message> {
+        Column::new()
+        .push(
+            Row::new()
+            .push(
+                button(
+                    svg(svg::Handle::from_memory(include_bytes!("icons/signal.svg")))
+                    .style(|theme: &iced::Theme, _status| {
+                        let palette = theme.extended_palette();
+                        svg::Style { color: match self.signal_state {
+                            LinkState::Linked => None,
+                            LinkState::Unlinked | LinkState::Linking => Some(palette.background.strong.color),
+                        } }
                     })
-                ))
-            }))
+                )
+                .padding(Padding::default().horizontal(15).vertical(5))
+                .style(messanger_button)
+                .on_press_maybe((self.show_messanger != Messanger::Signal).then(|| Message::ShowMessanger(Messanger::Signal)))
+            )
+            .push(
+                button(
+                    svg(svg::Handle::from_memory(include_bytes!("icons/whatsapp.svg")))
+                    .style(|theme: &iced::Theme, _status| {
+                        let palette = theme.extended_palette();
+                        svg::Style { color: match self.whatsapp_state {
+                            LinkState::Linked => None,
+                            LinkState::Unlinked | LinkState::Linking => Some(palette.background.strong.color),
+                        } }
+                    })
+                )
+                .padding(Padding::default().horizontal(15).vertical(5))
+                .style(messanger_button)
+                .on_press_maybe((self.show_messanger != Messanger::Whatsapp).then(|| Message::ShowMessanger(Messanger::Whatsapp)))
+            )
+        )
+        .push(
+            match self.show_messanger {
+                Messanger::Signal => self.signal_list(groups),
+                Messanger::Whatsapp => self.whatsapp_list(groups),
+            }
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -669,7 +773,7 @@ impl MainScreen {
         .spacing(7)
         .push(
             Column::new()
-            .width(250)
+            .width(180)
             .spacing(20)
             .padding(10)
             .align_x(Horizontal::Center)
@@ -681,11 +785,12 @@ impl MainScreen {
             )
             .push(
                 Row::new()
-                .height(70)
-                .spacing(5)
+                .spacing(8)
+                .align_y(Alignment::Center)
                 .push(
                     button(
                         icon!(settings)
+                        .size(26)
                     )
                     .on_press(Message::Settings)
                     .style(|theme, status| {
@@ -696,50 +801,17 @@ impl MainScreen {
                 )
                 .push(
                     button(
-                        svg(svg::Handle::from_memory(include_bytes!("icons/signal.svg")))
-                        .style(|theme: &iced::Theme, _status| {
-                            let palette = theme.extended_palette();
-                            svg::Style { color: match self.signal_state {
-                                LinkState::Linked => None,
-                                LinkState::Linking => Some(Color { r: 0.5, g: 0.5, b: 0., a: 1. }),
-                                LinkState::Unlinked => Some(palette.background.strong.color),
-                            } }
-                        })
+                        text("Категорії надсилання")
+                        .width(Length::Fill)
+                        .center()
                     )
-                    .style(button::text)
-                    .on_press_maybe(match self.signal_state {
-                        LinkState::Unlinked => Some(Message::LinkBegin),
-                        // LinkState::Linking => Some(Message::SetSignalState(LinkState::Unlinked)),
-                        _ => None
+                    .style(|theme, status| {
+                        let mut style = button::subtle(theme, status);
+                        style.border = Border::default().rounded(20);
+                        style
                     })
+                    .on_press(Message::Categories)
                 )
-                .push(
-                    button(
-                        svg(svg::Handle::from_memory(include_bytes!("icons/whatsapp.svg")))
-                        .style(|theme: &iced::Theme, _status| {
-                            let palette = theme.extended_palette();
-                            svg::Style { color: match self.whatsapp_state {
-                                LinkState::Linked => None,
-                                LinkState::Linking => Some(Color { r: 0.5, g: 0.5, b: 0., a: 1. }),
-                                LinkState::Unlinked => Some(palette.background.strong.color),
-                            } }
-                        })
-                    )
-                    .style(button::text)
-                    .on_press_maybe(match self.whatsapp_state {
-                        LinkState::Unlinked => Some(Message::WhatsappLink),
-                        // LinkState::Linking => Some(Message::SetWhatsappState(LinkState::Unlinked)),
-                        _ => None
-                    })
-                )
-            )
-            .push(
-                button(
-                    text("Категорії надсилання")
-                    .width(Length::Fill)
-                    .center()
-                )
-                .on_press(Message::Categories)
             )
             .push_maybe(
                 (
@@ -800,4 +872,16 @@ pub enum LinkState {
     Unlinked,
     Linking,
     Linked
+}
+
+fn messanger_button(theme: &iced::Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    button::Style {
+        background: Some(
+            if matches!(status, button::Status::Active | button::Status::Hovered) { palette.background.base.color }
+            else { palette.background.weaker.color } .into()
+        ),
+        border: Border::default().rounded(Radius::default().top(10)),
+        ..Default::default()
+    }
 }

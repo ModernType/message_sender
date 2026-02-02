@@ -48,7 +48,7 @@ fn main() {
     .title("Modern Sender")
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
-    .font(include_bytes!("MaterialIcons-Regular.ttf"))
+    .font(include_bytes!("ui/icons/MaterialIcons-Regular.ttf"))
     .default_font(iced::Font::with_name("Roboto"))
     .exit_on_close_request(false)
     .run()

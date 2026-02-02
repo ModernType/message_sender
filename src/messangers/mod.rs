@@ -12,3 +12,8 @@ pub enum Key {
     Whatsapp(Jid),
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum Messanger {
+    Signal,
+    Whatsapp,
+}
