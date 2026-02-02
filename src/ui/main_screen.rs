@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo}};
+use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -367,11 +367,8 @@ impl MainScreen {
                     .width(Length::Fill)
                     .push(text("Signal").width(Length::Fill))
                     .push(
-                        svg(svg::Handle::from_memory(
-                            if self.show_signal_groups { include_bytes!("icons/drop_up.svg") }
-                            else { include_bytes!("icons/drop_down.svg") }
-                        ))
-                        .width(Length::Shrink)
+                        if self.show_signal_groups { icon!(arrow_drop_up).size(18) }
+                        else { icon!(arrow_drop_down).size(18) }
                     )
                 )
                 .on_press(Message::ShowSignalGroups(!self.show_signal_groups))
@@ -389,14 +386,16 @@ impl MainScreen {
                     checkbox(group.active())
                     .label(&group.title)
                     .on_toggle(move |_| Message::ToggleGroup(Key::Signal(*key), group.send_mode.next()))
-                    .icon(checkbox::Icon {
-                        font: Font::with_name("Material Icons"),
-                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
-                                    else { '\u{e5ca}' },
-                        size: Some(Pixels::from(14)),
-                        line_height: text::LineHeight::default(),
-                        shaping: text::Shaping::Basic,
-                    })
+                    .icon(
+                        checkbox::Icon {
+                            font: crate::ui::icons::FONT,
+                            code_point: if let SendMode::Frequency = group.send_mode { code_point!(graphic_eq) }
+                                        else { code_point!(check) },
+                            size: Some(Pixels::from(14)),
+                            line_height: text::LineHeight::default(),
+                            shaping: text::Shaping::Basic,
+                        }
+                    )
                 ))
             }))
             .push(
@@ -405,11 +404,8 @@ impl MainScreen {
                         .width(Length::Fill)
                         .push(text("Whatsapp").width(Length::Fill))
                         .push(
-                            svg(svg::Handle::from_memory(
-                                if self.show_whatsapp_groups { include_bytes!("icons/drop_up.svg") }
-                                else { include_bytes!("icons/drop_down.svg") }
-                            ))
-                            .width(Length::Shrink)
+                            if self.show_whatsapp_groups { icon!(arrow_drop_up) }
+                            else { icon!(arrow_drop_down) }
                         )
                     )
                     .on_press(Message::ShowWhatsappGroups(!self.show_whatsapp_groups))
@@ -475,7 +471,8 @@ impl MainScreen {
             Row::new()
             .align_y(Alignment::Center)
             .push(
-                button(text(if self.show_side_bar.value() { ">" } else { "<" }).center())
+                button(if self.show_side_bar.value() { icon!(arrow_right) } else { icon!(arrow_left) }.center().size(24))
+                .padding(3)
                 .height(80)
                 .style(|theme: &iced::Theme, button_status| {
                     let palette = theme.extended_palette();
@@ -688,12 +685,7 @@ impl MainScreen {
                 .spacing(5)
                 .push(
                     button(
-                        svg(svg::Handle::from_memory(include_bytes!("icons/settings.svg")))
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .style(|theme: &iced::Theme, _status| {
-                            svg::Style { color: Some(theme.palette().text) }
-                        })
+                        icon!(settings)
                     )
                     .on_press(Message::Settings)
                     .style(|theme, status| {

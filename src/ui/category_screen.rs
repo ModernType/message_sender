@@ -4,6 +4,7 @@ use iced::{Alignment, Border, Font, Length, Pixels};
 use iced::{Element, Task};
 use iced::widget::{Column, Row, button, checkbox, container, scrollable, space, svg, text, text_input};
 
+use crate::icon;
 use crate::message::SendMode;
 use crate::messangers::Key;
 use crate::send_categories::SendCategory;
@@ -134,8 +135,7 @@ impl CategoryScreen {
             .align_y(Alignment::Center)
             .push(
                 button(
-                    svg(svg::Handle::from_memory(icons::ARROW_BACK))
-                    .width(Length::Shrink)
+                    icon!(arrow_back)
                 )
                 .on_press(Message::Back)
                 .style(button::secondary)

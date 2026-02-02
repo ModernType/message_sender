@@ -1,7 +1,7 @@
 use iced::{Alignment, Border, Element, Font, Length, Padding, Task, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, svg, text, text_input}};
 use rfd::FileHandle;
 
-use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
+use crate::{icon, send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -125,7 +125,7 @@ impl SettingsScreen {
             Row::new()
             .push(
                 button(
-                    svg(svg::Handle::from_memory(include_bytes!("icons/arrow_back.svg")))
+                    icon!(arrow_back)
                 )
                 .style(button::secondary)
                 .width(Length::Shrink)

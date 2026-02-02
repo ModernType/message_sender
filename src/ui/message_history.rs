@@ -3,7 +3,7 @@ use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}
 use iced::{Alignment, Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
 use wacore_binary::jid::Jid;
 
-use crate::{message::SendMode, messangers::Key, ui::icons};
+use crate::{icon, message::SendMode, messangers::Key, ui::icons};
 
 #[derive(Debug)]
 pub struct SendMessageInfo {
@@ -261,8 +261,7 @@ impl SendMessageInfo {
                 .spacing(3)
                 .push(
                     button(
-                        svg(svg::Handle::from_memory(include_bytes!("icons/delete.svg")))
-                        .width(Length::Shrink)
+                        icon!(delete)
                     )
                     .style(button::danger)
                     .on_press_maybe(match status {
@@ -273,11 +272,10 @@ impl SendMessageInfo {
                 )
                 .push(
                     button(
-                        svg(match status {
-                            SendStatus::Pending | SendStatus::Sending | SendStatus::Failed => svg::Handle::from_memory(icons::REFRESH),
-                            _ => svg::Handle::from_memory(icons::EDIT)
-                        })
-                        .width(Length::Shrink)
+                        match status {
+                            SendStatus::Pending | SendStatus::Sending | SendStatus::Failed => icon!(refresh),
+                            _ => icon!(edit),
+                        }
                     )
                     .style(button::secondary)
                     .on_press_maybe(match status {
