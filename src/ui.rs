@@ -19,7 +19,7 @@ mod icons;
 mod ext;
 mod theme;
 
-const NOTIFICATION_SHOW_TIME: u64 = 3000;
+const NOTIFICATION_SHOW_TIME: u64 = 6000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Screen {
@@ -392,7 +392,7 @@ impl App {
         Subscription::batch([
             iced::system::theme_changes().map(|mode| Message::ThemeChange(mode.into())),
             Subscription::run(Self::setup_subscription),
-            if self.data.autoupdate_groups { iced::time::every(std::time::Duration::from_secs(10)).map(|_| Message::UpdateGroupList) } else { Subscription::none() },
+            if self.data.autoupdate_groups { iced::time::every(std::time::Duration::from_secs(60)).map(|_| Message::UpdateGroupList) } else { Subscription::none() },
             iced::window::close_requests().map(|_| Message::OnClose),
             if self.is_animating() { iced::window::frames().map(|_| Message::None) } else { Subscription::none() },
             iced::keyboard::listen().map(Message::Keyboard),
