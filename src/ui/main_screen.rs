@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}};
 
-use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, space, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
 use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, Messanger, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo, side_menu::LinkState}};
@@ -566,11 +566,53 @@ impl MainScreen {
         .into()
     }
 
-    pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
+    pub fn tutorial(&self) -> Element<'_, Message> {
+        Column::new()
+        .padding(15)
+        .push(
+            space()
+            .height(100)
+        )
+        .push(
+            Row::new()
+            .spacing(10)
+            .align_y(Alignment::Center)
+            .push(
+                icon!(arrow_back)
+                .size(28)
+            )
+            .push(
+                "Для початку роботи прив'яжіть акаунт месенджера до програми"
+            )
+        )
+        .push(
+            space()
+            .height(Length::Fill)
+        )
+        .push(
+            Column::new()
+            .push(
+                "Налаштуйте IP-адресу для прийому повідомлень у налаштуваннях"
+            )
+            .push(
+                icon!(subdirectory_arrow_left)
+                .size(28)
+            )
+        )
+        .height(Length::Fill)
+        .into()
+    }
+
+    pub fn view<'a>(&'a self, data: &'a AppData, tutorial: bool) -> Element<'a, Message> {
         Row::new()
         .spacing(7)
         .push(
-            self.message_history()
+            if tutorial {
+                self.tutorial()
+            }
+            else {
+                self.message_history()
+            }
         )
         .push_maybe(
             (self.show_side_bar.is_animating(self.now) || self.show_side_bar.value()).then(|| {

@@ -135,6 +135,12 @@ impl App {
         self.data.save()
     }
 
+    fn is_tutorial(&self) -> bool {
+        !self.data.signal_logged
+        && !self.data.whatsapp_logged
+        && self.main_scr.message_history.is_empty()
+    }
+
     pub fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
         self.now = now;
 
@@ -382,7 +388,7 @@ impl App {
             )
             .push(
                 match self.cur_screen {
-                    Screen::Main => self.main_scr.view(&self.data).map(Into::into),
+                    Screen::Main => self.main_scr.view(&self.data, self.is_tutorial()).map(Into::into),
                     Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
                     Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
                 }
