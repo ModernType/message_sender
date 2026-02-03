@@ -7,7 +7,6 @@ use super::Message as MainMessage;
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    ToMainScreen,
     ToggleMarkdown(bool),
     ToggleParallel(bool),
     ToggleShowGroups(bool),
@@ -43,7 +42,6 @@ impl SettingsScreen {
 
     pub fn update(&mut self, message: Message, data: &mut AppData) -> Task<MainMessage> {
         match message {
-            Message::ToMainScreen => return Task::done(MainMessage::SetScreen(super::Screen::Main)),
             Message::ToggleMarkdown(markdown) => {
                 data.markdown = markdown;
             },
@@ -122,22 +120,10 @@ impl SettingsScreen {
         .padding(Padding::ZERO.horizontal(20).top(20))
         .spacing(20)
         .push(
-            Row::new()
-            .push(
-                button(
-                    icon!(arrow_back)
-                )
-                .style(button::secondary)
-                .width(Length::Shrink)
-                .height(Length::Shrink)
-                .on_press(Message::ToMainScreen)
-            )
-            .push(
-                text("Налаштування")
-                .width(Length::Fill)
-                .center()
-                .size(24)
-            )
+            text("Налаштування")
+            .width(Length::Fill)
+            .center()
+            .size(24)
         )
         .push(
             scrollable(

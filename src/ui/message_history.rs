@@ -292,9 +292,9 @@ impl SendMessageInfo {
             let palette = theme.extended_palette();
             let background = match status {
                 SendStatus::Deleted | SendStatus::Failed => palette.danger.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
-                SendStatus::Sending => palette.background.base.color,
+                SendStatus::Sending => palette.background.weak.color,
                 SendStatus::Sent => palette.success.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
-                SendStatus::Pending => palette.background.base.color.scale_alpha(if palette.is_dark { 0.05 } else { 0.4 }),
+                SendStatus::Pending => palette.background.weakest.color,
             };
             container::Style {
                 background: Some(background.into()),

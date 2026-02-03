@@ -34,7 +34,6 @@ pub enum Message {
     ToggleUseGeneral(usize, bool),
     NetworkSerch(String),
     GroupSearch(String),
-    Back
 }
 
 impl From<Message> for MainMessage {
@@ -111,10 +110,6 @@ impl CategoryScreen {
                 let cat = &mut data.categories[index];
                 cat.use_general = state;
             },
-            Message::Back => {
-                data.categories.iter_mut().for_each(SendCategory::shrink);
-                return Task::done(MainMessage::SetScreen(super::Screen::Main));
-            },
             Message::NetworkSerch(s) => {
                 self.network_search = s
             },
@@ -130,22 +125,10 @@ impl CategoryScreen {
         let col = Column::new()
         .spacing(5)
         .push(
-            Row::new()
-            .spacing(3)
-            .align_y(Alignment::Center)
-            .push(
-                button(
-                    icon!(arrow_back)
-                )
-                .on_press(Message::Back)
-                .style(button::secondary)
-            )
-            .push(
-                text("Канали надсилання")
-                .width(Length::Fill)
-                .size(20)
-                .center()
-            )
+            text("Канали надсилання")
+            .width(Length::Fill)
+            .size(20)
+            .center()
         )
         .push(
             space()
