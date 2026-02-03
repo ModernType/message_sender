@@ -135,11 +135,6 @@ impl App {
         self.data.save()
     }
 
-    #[inline]
-    fn whatsapp_registered(&self) -> bool {
-        self.main_scr.whatsapp_state == LinkState::Linked
-    }
-
     pub fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
         self.now = now;
 
@@ -147,7 +142,7 @@ impl App {
             Message::MainScrMessage(m) => self.main_scr.update(m, now, &mut self.data),
             Message::SettingsScrMessage(m) => self.sett_scr.update(m, &mut self.data),
             Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.data),
-            Message::SideMenuMessage(m) => self.side_menu.update(m, now),
+            Message::SideMenuMessage(m) => self.side_menu.update(m, now, &mut self.data),
             Message::SignalMessage(m) => {
                 if let Some(channel) = self.signal_task_send.as_ref() {
                     let mut channel = channel.clone();
@@ -216,9 +211,6 @@ impl App {
                         self.whatsapp_client = Some(client);
                         self.whatsapp_logged = true;
                         Task::done(side_menu::Message::SetWhatsappState(LinkState::Linked).into())
-                    },
-                    None if !self.whatsapp_registered() => {
-                        Task::done(side_menu::Message::SetWhatsappState(LinkState::Unlinked).into())
                     },
                     _ => {
                         Task::none()

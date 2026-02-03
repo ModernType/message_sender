@@ -16,8 +16,6 @@ pub enum Message {
     TextEdit(text_editor::Action),
     SendMessage(String, Option<String>, Option<u64>),
     SendMessagePressed,
-    LinkBegin,
-    WhatsappLink,
     ToggleGroup(Key, SendMode),
     SetGroups(Vec<(Key, String)>),
     UpdateGroups,
@@ -31,10 +29,9 @@ pub enum Message {
     ShowMessanger(Messanger),
     MessageFile,
     NextMessage,
-    Categories,
     Cancel(usize),
-    CancelLink,
-    RefreshMessage(usize)
+    RefreshMessage(usize),
+    SendMessageDirect(Arc<SendMessageInfo>),
 }
 
 impl From<Message> for MainMessage {
@@ -47,8 +44,6 @@ impl From<Message> for MainMessage {
 pub(super) struct MainScreen {
     register_url: Option<qr_code::Data>,
     whatsapp_url: Option<qr_code::Data>,
-    pub signal_state: LinkState,
-    pub whatsapp_state: LinkState,
     message_content: text_editor::Content,
     pub message_history: VecDeque<Arc<SendMessageInfo>>,
     pub show_side_bar: Animation<bool>,
@@ -64,8 +59,6 @@ impl MainScreen {
         Self {
             register_url: None,
             whatsapp_url: None,
-            signal_state: Default::default(),
-            whatsapp_state: Default::default(),
             message_content: Default::default(),
             message_history: Default::default(),
             show_side_bar: Animation::new(false)
@@ -83,16 +76,10 @@ impl MainScreen {
         self.now = now;
 
         match message {
-            Message::Categories => {
-                return Task::done(MainMessage::SetScreen(super::Screen::Categories))
-            },
             Message::Cancel(idx) => {
                 let message = &self.message_history[idx];
                 message.set_status(super::message_history::SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
                 return Task::done(SignalMessage::Cancel.into());
-            },
-            Message::CancelLink => {
-                return Task::done(SignalMessage::CancelLink.into())
             },
             Message::RefreshMessage(idx) => {
                 let message = &self.message_history[idx];
@@ -211,15 +198,12 @@ impl MainScreen {
                     )),
                 ])
             },
-            Message::LinkBegin => {
-                return Task::done(SignalMessage::LinkBegin.into())
+            Message::SendMessageDirect(message) => {
+                message.set_status(super::message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
+                return Task::done(MainMessage::SendMessage(message))
             },
             Message::ShowMessanger(messanger) => {
                 self.show_messanger = messanger;
-            }
-            Message::WhatsappLink => {
-                self.whatsapp_state = LinkState::Linking;
-                return Task::perform(whatsapp::start_whatsapp_task(), |_| MainMessage::None);
             },
             Message::ToggleGroup(key, send_mode) => {
                 data.groups.get_mut(&key).unwrap().send_mode = send_mode;

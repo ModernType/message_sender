@@ -257,30 +257,39 @@ impl SendMessageInfo {
                 )
             )
             .push(
-                Column::new()
-                .spacing(3)
+                Row::new()
+                .spacing(5)
                 .push(
                     button(
-                        icon!(delete)
+                        match status {
+                            SendStatus::Sent => icon!(edit),
+                            _ => icon!(refresh),
+                        }
+                        .size(28)
                     )
-                    .style(button::danger)
+                    .style(button::text)
                     .on_press_maybe(match status {
-                        SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
-                        SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
+                        SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
+                        SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
+                        SendStatus::Deleted => Some(super::main_screen::Message::SendMessageDirect(self.clone())),
                         _ => None,
                     })
                 )
                 .push(
                     button(
-                        match status {
-                            SendStatus::Pending | SendStatus::Sending | SendStatus::Failed => icon!(refresh),
-                            _ => icon!(edit),
-                        }
+                        icon!(delete)
+                        .size(28)
                     )
-                    .style(button::secondary)
+                    .style(|theme: &Theme, status| button::Style {
+                        text_color: match status {
+                            button::Status::Active => theme.extended_palette().danger.base.color,
+                            _ => theme.extended_palette().danger.weak.color,
+                        },
+                        ..button::text(theme, status)
+                    })
                     .on_press_maybe(match status {
-                        SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
-                        SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
+                        SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
+                        SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
                         _ => None,
                     })
                 )

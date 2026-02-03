@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 use derive_more::Display;
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, opaque, progress_bar, space, svg, text, tooltip}};
 
-use crate::{icon, messangers::{signal::SignalMessage, whatsapp}, ui::{Screen, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
+use crate::{icon, messangers::{signal::SignalMessage, whatsapp}, ui::{AppData, Screen, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
 
 use super::Message as MainMessage;
 
@@ -44,7 +44,7 @@ impl SideMenu {
         }
     }
 
-    pub fn update(&mut self, message: Message, now: Instant) -> Task<MainMessage> {
+    pub fn update(&mut self, message: Message, now: Instant, data: &mut AppData) -> Task<MainMessage> {
         self.now = now;
         match message {
             Message::LinkSignal => Task::done(SignalMessage::LinkBegin.into()),
@@ -62,6 +62,9 @@ impl SideMenu {
             },
             Message::SetSignalState(state) => {
                 self.signal_state = state;
+                if state == LinkState::Linked {
+                    data.signal_logged = true
+                }
                 if state != LinkState::Linking {
                     Task::done(super::main_screen::Message::SetRegisterUrl(None).into())
                 }
@@ -71,6 +74,9 @@ impl SideMenu {
             },
             Message::SetWhatsappState(state) => {
                 self.whatsapp_state = state;
+                if state == LinkState::Linked {
+                    data.whatsapp_logged = true
+                }
                 if state != LinkState::Linking {
                     Task::done(super::main_screen::Message::SetWhatsappUrl(None).into())
                 }
