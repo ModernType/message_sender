@@ -17,6 +17,14 @@ Run the executable and you are good to go 👍
 
 ## Building
 For compilation you need *nightly* [rust toolchain](https://rust-lang.org) to be installed.
+Also you need to install [Protobuf compiler](https://uk.wikipedia.org/wiki/Protocol_Buffers) using `apt`:
+```
+sudo apt install protobuf-compiler
+```
+Debug build is set up to use [`cranelift`](https://cranelift.dev/) compiler backend. To install it use `rustup`:
+```
+rustup component add rustc-codegen-cranelift-preview --toolchain nightly
+```
 
 Clone the project using `git`:
 
