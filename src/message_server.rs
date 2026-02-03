@@ -12,11 +12,11 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
     let listener = loop {
         match TcpListener::bind(&addr).await {
             Ok(listener) => {
-                msg_send_channel.send(ui::Message::Notification(format!("Прийом повідомлень запущено на {}", &addr))).await.unwrap();
+                _ = msg_send_channel.send(ui::Message::Notification(format!("Прийом повідомлень запущено на {}", &addr))).await;
                 break listener
             },
             Err(_e) => {
-                msg_send_channel.send(ui::Message::Notification(format!("Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її, будь ласка, у налаштуваннях", &addr))).await.unwrap();
+                _ = msg_send_channel.send(ui::Message::Notification(format!("Не можу запустити сервер на адресі {}. Може вона вже зайнята. Змініть її, будь ласка, у налаштуваннях", &addr))).await;
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }

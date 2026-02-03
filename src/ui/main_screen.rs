@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}
 use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, svg, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, Messanger, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo}};
+use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, Messanger, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo, side_menu::LinkState}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -11,11 +11,8 @@ use super::ext::PushMaybe;
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    SetRegisterUrl(url::Url),
-    SetSignalState(LinkState),
-    SetWhatsappUrl(String),
-    SetWhatsappState(LinkState),
-    SetAutoSend(bool),
+    SetRegisterUrl(Option<url::Url>),
+    SetWhatsappUrl(Option<String>),
     TextEdit(text_editor::Action),
     SendMessage(String, Option<String>, Option<u64>),
     SendMessagePressed,
@@ -102,40 +99,27 @@ impl MainScreen {
                 message.set_status(super::message_history::SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
             },
             Message::SetRegisterUrl(url) => {
-                let url = url.as_ref();
-                self.register_url = Some(
-                    qr_code::Data::new(url).unwrap()
-                );
-                self.signal_state = LinkState::Linking;
-                self.show_side_bar.go_mut(true, now);
+                if let Some(url) = url {
+                    let url = url.as_ref();
+                    self.register_url = Some(
+                        qr_code::Data::new(url).unwrap()
+                    );
+                    self.show_side_bar.go_mut(true, now);
+                }
+                else {
+                    self.register_url = None
+                }
             },
             Message::SetWhatsappUrl(data) => {
-                self.whatsapp_url = Some(
-                    qr_code::Data::new(data.as_bytes()).unwrap()
-                );
-                self.whatsapp_state = LinkState::Linking;
-                self.show_side_bar.go_mut(true, now);
-            },
-            Message::SetWhatsappState(state) => {
-                self.whatsapp_state = state;
-                if state != LinkState::Linking {
-                    self.whatsapp_url = None;
+                if let Some(data) = data {
+                    self.whatsapp_url = Some(
+                        qr_code::Data::new(data.as_bytes()).unwrap()
+                    );
+                    self.show_side_bar.go_mut(true, now);
                 }
-                if state == LinkState::Linked {
-                    data.whatsapp_logged = true;
+                else {
+                    self.whatsapp_url = None
                 }
-            }
-            Message::SetSignalState(state) => {
-                self.signal_state = state;
-                if state != LinkState::Linking {
-                    self.register_url = None;
-                }
-                if state == LinkState::Linked {
-                    data.signal_logged = true;
-                }
-            },
-            Message::SetAutoSend(autosend) => {
-                data.autosend = autosend;
             },
             Message::TextEdit(action) => {
                 self.message_content.perform(action);
@@ -864,14 +848,6 @@ impl Group {
     pub fn active(&self) -> bool {
         self.send_mode.active()
     }
-}
-
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
-pub enum LinkState {
-    #[default]
-    Unlinked,
-    Linking,
-    Linked
 }
 
 fn messanger_button(theme: &iced::Theme, status: button::Status) -> button::Style {

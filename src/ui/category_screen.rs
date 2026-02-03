@@ -141,7 +141,7 @@ impl CategoryScreen {
                 .style(button::secondary)
             )
             .push(
-                text("Категорії надсилання")
+                text("Канали надсилання")
                 .width(Length::Fill)
                 .size(20)
                 .center()

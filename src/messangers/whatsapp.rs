@@ -7,7 +7,7 @@ use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
 use whatsapp_rust_ureq_http_client::UreqHttpClient;
 use waproto::whatsapp as wa;
 
-use crate::{message::{SendMode, parse_message_with_whatsapp_format}, messangers::Key, ui::{self, main_screen::LinkState, message_history::{SendMessageInfo, SendStatus}}};
+use crate::{message::{SendMode, parse_message_with_whatsapp_format}, messangers::Key, ui::{self, side_menu::LinkState, message_history::{SendMessageInfo, SendStatus}}};
 
 pub static UI_MESSAGE_SENDER: OnceLock<UnboundedSender<ui::Message>> = OnceLock::new();
 
@@ -21,7 +21,7 @@ pub async fn start_whatsapp_task() {
             // TODO: Maybe use `bot_handle` for termination
         },
         Err(e) => {
-            UI_MESSAGE_SENDER.get().unwrap().send(ui::main_screen::Message::SetWhatsappState(LinkState::Unlinked).into()).await.unwrap();
+            UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Unlinked).into()).await.unwrap();
             UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::Notification(format!("Error linking to Whatsapp: {e}"))).await.unwrap();
         },
     }
@@ -43,7 +43,7 @@ async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<(
             // TODO: Maybe use timeout to communicate to UI
             #[allow(unused_variables)]
             Event::PairingQrCode { code, timeout } => {
-                UI_MESSAGE_SENDER.get().unwrap().send(ui::main_screen::Message::SetWhatsappUrl(code).into()).await.unwrap();
+                UI_MESSAGE_SENDER.get().unwrap().send(ui::main_screen::Message::SetWhatsappUrl(Some(code)).into()).await.unwrap();
             },
             Event::Connected(_) => {
                 println!("Connected to whatsapp");

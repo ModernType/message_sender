@@ -2,12 +2,12 @@ use std::{
     collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
-use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Stack, container, text}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, button, container, text}};
 use presage::{Manager, manager::Registered};
 use presage_store_sqlite::SqliteStore;
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
-use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, main_screen::LinkState, theme::Theme}};
+use crate::{icon, message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, side_menu::{LinkState, SideMenu}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -15,13 +15,14 @@ pub mod main_screen;
 pub mod settings_screen;
 pub mod message_history;
 pub mod category_screen;
+pub mod side_menu;
 mod icons;
 mod ext;
 mod theme;
 
 const NOTIFICATION_SHOW_TIME: u64 = 6000;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Main,
     Settings,
@@ -32,6 +33,7 @@ pub enum Message {
     MainScrMessage(main_screen::Message),
     SettingsScrMessage(settings_screen::Message),
     CategoriesScrMessage(category_screen::Message),
+    SideMenuMessage(side_menu::Message),
     SignalMessage(SignalMessage),
     SetManager(Manager<SqliteStore, Registered>),
     SetWhatsappClient(Option<Arc<whatsapp_rust::Client>>),
@@ -87,6 +89,7 @@ pub struct App {
     notification: Notification,
     signal_logged: bool,
     whatsapp_logged: bool,
+    side_menu: SideMenu,
 }
 
 impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
@@ -122,6 +125,7 @@ impl App {
                 signal_task_send: None,
                 now: Instant::now(),
                 notification: Notification::new(),
+                side_menu: SideMenu::new(),
             },
             start_task
         )
@@ -143,13 +147,13 @@ impl App {
             Message::MainScrMessage(m) => self.main_scr.update(m, now, &mut self.data),
             Message::SettingsScrMessage(m) => self.sett_scr.update(m, &mut self.data),
             Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.data),
+            Message::SideMenuMessage(m) => self.side_menu.update(m, now),
             Message::SignalMessage(m) => {
                 if let Some(channel) = self.signal_task_send.as_ref() {
                     let mut channel = channel.clone();
-                    Task::perform(
-                        async move { channel.send(m).await },
-                        |_| Message::None
-                    )
+                    Task::future(
+                        async move { channel.send(m).await }
+                    ).discard()
                 }
                 else {
                     Task::none()
@@ -157,6 +161,7 @@ impl App {
             },
             Message::SetScreen(screen) => {
                 self.cur_screen = screen;
+                self.side_menu.open.go_mut(false, now);
                 if let Screen::Main = screen {
                     if let Err(e) = self.save() {
                         log::error!("Error saving data: {e}");
@@ -201,7 +206,7 @@ impl App {
                 self.manager = Some(mng.clone());
                 self.signal_logged = true;
                 Task::batch([
-                    Task::done(main_screen::Message::SetSignalState(main_screen::LinkState::Linked).into()),
+                    Task::done(side_menu::Message::SetSignalState(LinkState::Linked).into()),
                     Task::done(SignalMessage::Sync(mng).into())   
                 ])
             },
@@ -210,10 +215,10 @@ impl App {
                     Some(client) => {
                         self.whatsapp_client = Some(client);
                         self.whatsapp_logged = true;
-                        Task::done(main_screen::Message::SetWhatsappState(LinkState::Linked).into())
+                        Task::done(side_menu::Message::SetWhatsappState(LinkState::Linked).into())
                     },
                     None if !self.whatsapp_registered() => {
-                        Task::done(main_screen::Message::SetWhatsappState(LinkState::Unlinked).into())
+                        Task::done(side_menu::Message::SetWhatsappState(LinkState::Unlinked).into())
                     },
                     _ => {
                         Task::none()
@@ -231,7 +236,7 @@ impl App {
 
                 Task::batch([
                     if self.signal_logged { Task::done(SignalMessage::LinkBegin.into()) } else { Task::none() },
-                    if self.whatsapp_logged { Task::perform(whatsapp::start_whatsapp_task(), |_| Message::None) } else { Task::none() },
+                    if self.whatsapp_logged { Task::future(whatsapp::start_whatsapp_task()).discard() } else { Task::none() },
                     Task::perform(message_server::start_server(self.data.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
                 ])
             },
@@ -262,7 +267,7 @@ impl App {
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::send_message(client.clone(), message, self.data.markdown), |_| Message::None)
+                        Task::future(whatsapp::send_message(client.clone(), message, self.data.markdown)).discard()
                     );
                 }
                 else if !message.groups_whatsapp.is_empty() {
@@ -281,7 +286,7 @@ impl App {
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::delete_message(client.clone(), message), |_| Message::None)
+                        Task::future(whatsapp::delete_message(client.clone(), message)).discard()
                     );
                 }
                 Task::batch(task_list)
@@ -295,7 +300,7 @@ impl App {
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
                     task_list.push(
-                        Task::perform(whatsapp::edit_message(client.clone(), message, whatsapp_ids, self.data.markdown), |_| Message::None)
+                        Task::future(whatsapp::edit_message(client.clone(), message, whatsapp_ids, self.data.markdown)).discard()
                     );
                 }
                 Task::batch(task_list)
@@ -367,7 +372,10 @@ impl App {
                 self.data.networks = networks;
                 Task::done(Message::Notification("Нові мережі додані!".to_owned()))
             },
-            Message::None => Task::done(main_screen::Message::UpdateMessageHistory.into()),
+            Message::None => Task::batch([
+                Task::done(main_screen::Message::UpdateMessageHistory.into()),
+                Task::done(side_menu::Message::Animate.into())
+            ]),
         }
     }
 
@@ -376,15 +384,41 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .push(
-            match self.cur_screen {
-                Screen::Main => self.main_scr.view(&self.data).map(Into::into),
-                Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
-                Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
-            }
+            Row::new()
+            .push(
+                self.side_menu.minimized(self.cur_screen).map(Into::into)
+            )
+            .push(
+                match self.cur_screen {
+                    Screen::Main => self.main_scr.view(&self.data).map(Into::into),
+                    Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
+                    Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
+                }
+            )
+        )
+        .push(
+            self.side_menu.view(self.cur_screen).map(Into::into)
         )
         .push(
             self.notification.view(self.now)
         )
+        // .push(
+        //     self.side_menu.view().map(Into::into)
+        // )
+        // .push(
+        //     container(
+        //         Element::from(
+        //             button(
+        //                 icon!(menu)
+        //                 .size(26)
+        //             )
+        //             .on_press(side_menu::Message::ToggleSideMenu)
+        //             .padding(Padding::default().vertical(3).horizontal(5))
+        //         )
+        //         .map(Into::into)
+        //     )
+        //     .padding(20)
+        // )
         .into()
     }
 
@@ -401,7 +435,8 @@ impl App {
 
     pub fn is_animating(&self) -> bool {
         self.main_scr.show_side_bar.is_animating(self.now) ||
-        self.notification.is_animating(self.now)
+        self.notification.is_animating(self.now) ||
+        self.side_menu.is_animating(self.now)
     }
 
     fn setup_subscription() -> impl Stream<Item = Message> {

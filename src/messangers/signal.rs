@@ -6,7 +6,7 @@ use presage::{libsignal_service::configuration::SignalServers, manager::Register
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::{AbortHandle, LocalSet};
 
-use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}}};
+use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}, side_menu::LinkState}};
 
 type Manager = presage::Manager<SqliteStore, Registered>;
 
@@ -90,14 +90,14 @@ impl SignalWorker {
                 SignalMessage::Linked(mng_res) => {
                     match mng_res {
                         Ok(mng) => send_ui_message(ui_message_sender.clone(), ui::Message::SetManager(mng)),
-                        Err(_e) => send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Unlinked)),
+                        Err(_e) => send_ui_message(ui_message_sender.clone(), ui::side_menu::Message::SetSignalState(LinkState::Unlinked)),
                     }
                 },
                 SignalMessage::CancelLink => {
                     if let Some(handle) = self.abort_handle.take() {
                         handle.abort();
                     }
-                    send_ui_message(ui_message_sender.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Unlinked))
+                    send_ui_message(ui_message_sender.clone(), ui::side_menu::Message::SetSignalState(LinkState::Unlinked))
                 },
                 SignalMessage::Sync(mng) => {
                     _ = tokio::task::spawn_local(sync(ui_message_sender.clone(), mng));
@@ -173,7 +173,7 @@ pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> 
 }
 
 async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
-    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::SetSignalState(ui::main_screen::LinkState::Linking));
+    send_ui_message(msg_send_channel.clone(), ui::side_menu::Message::SetSignalState(LinkState::Linking));
     loop {
         match TcpStream::connect("209.85.233.101:80") {
             Ok(_) => {
@@ -221,7 +221,7 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
                 async move {
                     match rx.await {
                         Ok(url) => {
-                           msg_send_channel.send(crate::ui::main_screen::Message::SetRegisterUrl(url).into()).await.unwrap()
+                           msg_send_channel.send(crate::ui::main_screen::Message::SetRegisterUrl(Some(url)).into()).await.unwrap()
                         },
                         Err(_e) => {
                             
@@ -248,7 +248,7 @@ async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut man
                     info!("Got message");
                 }
                 presage::model::messages::Received::QueueEmpty => {
-                    msg_send_channel.send(crate::ui::Message::Synced).await.unwrap();
+                    _ = msg_send_channel.send(crate::ui::Message::Synced).await;
                 }
             }
         }
