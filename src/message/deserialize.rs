@@ -43,12 +43,6 @@ pub struct MessageInner {
     pub network_id: Option<u64>,
 }
 
-impl Message {
-    pub fn with_frequency(&self) -> String {
-        format!("{}\n{}", self.0.frequency, self)
-    }
-}
-
 impl Display for MessageInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.title)?;
@@ -81,7 +75,7 @@ struct MessageOuter {
 
 #[derive(Deserialize, Debug,Default)]
 #[serde(transparent)]
-struct MessageGroup(Vec<IndividualMessage>);
+pub struct MessageGroup(Vec<IndividualMessage>);
 
 impl Display for MessageGroup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,7 +116,7 @@ impl From<String> for CleanedMessage {
 
 #[derive(Deserialize, Display, Debug, Default)]
 #[serde(from = "Option<String>")]
-struct Name(String);
+pub struct Name(String);
 
 impl Deref for Name {
     type Target = str;

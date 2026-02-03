@@ -1,7 +1,7 @@
-use iced::{Alignment, Border, Element, Font, Length, Padding, Task, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, svg, text, text_input}};
+use iced::{Alignment, Border, Element, Font, Length, Padding, Task, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
 use rfd::FileHandle;
 
-use crate::{icon, send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
+use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
 
 use super::Message as MainMessage;
 

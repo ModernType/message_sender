@@ -1,9 +1,9 @@
 use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
 
-use iced::{Alignment, Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, svg, text}};
+use iced::{Alignment, Border, Element, Length, Theme, widget::{Column, Row, button, container, progress_bar, text}};
 use wacore_binary::jid::Jid;
 
-use crate::{icon, message::SendMode, messangers::Key, ui::icons};
+use crate::{icon, message::SendMode, messangers::Key};
 
 #[derive(Debug)]
 pub struct SendMessageInfo {

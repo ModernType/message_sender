@@ -33,10 +33,6 @@ impl SendCategory {
     pub fn contains_network(&self, id: &u64) -> bool {
         self.networks.contains(id)
     }
-
-    pub fn shrink(&mut self) {
-        self.groups.retain(|_, val| val.active());
-    }
 }
 
 

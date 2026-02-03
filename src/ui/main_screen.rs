@@ -1,9 +1,9 @@
-use std::{collections::{HashMap, VecDeque}, sync::Arc, time::{Duration, Instant}};
+use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
 
-use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Pixels, Task, alignment::Horizontal, border::Radius, mouse::Interaction, widget::{Column, Row, button, checkbox, container, mouse_area, qr_code, responsive, scrollable, space, svg, text, text_editor}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, container, qr_code, responsive, scrollable, space, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{code_point, icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, Messanger, signal::SignalMessage, whatsapp}, notification, ui::{AppData, main_screen, message_history::SendMessageInfo, side_menu::LinkState}};
+use crate::{icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage}, notification, ui::{AppData, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -16,17 +16,14 @@ pub enum Message {
     TextEdit(text_editor::Action),
     SendMessage(String, Option<String>, Option<u64>),
     SendMessagePressed,
-    ToggleGroup(Key, SendMode),
     SetGroups(Vec<(Key, String)>),
     UpdateGroups,
     UpdateMessageHistory,
-    Settings,
     ShowMessageHistory(bool),
     DeleteMessage(usize),
     EditMessage(usize),
     CancelEdit,
     ConfirmEdit,
-    ShowMessanger(Messanger),
     MessageFile,
     NextMessage,
     Cancel(usize),
@@ -49,7 +46,6 @@ pub(super) struct MainScreen {
     pub show_side_bar: Animation<bool>,
     pub edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
-    show_messanger: Messanger,
     pub message_queue: Vec<AcceptedMessage>,
     pub cur_message: Option<AcceptedMessage>
 }
@@ -66,7 +62,6 @@ impl MainScreen {
                 .easing(iced::animation::Easing::EaseInOut),
             edit: None,
             now: Instant::now(),
-            show_messanger: Messanger::Signal,
             message_queue: Vec::new(),
             cur_message: None,
         }
@@ -202,12 +197,6 @@ impl MainScreen {
                 message.set_status(super::message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
                 return Task::done(MainMessage::SendMessage(message))
             },
-            Message::ShowMessanger(messanger) => {
-                self.show_messanger = messanger;
-            },
-            Message::ToggleGroup(key, send_mode) => {
-                data.groups.get_mut(&key).unwrap().send_mode = send_mode;
-            },
             Message::SetGroups(groups) => {
                 for (key, title) in groups {
                     data.groups.entry(key)
@@ -219,9 +208,6 @@ impl MainScreen {
             },
             Message::UpdateMessageHistory => {
                 // Makes window redraw to display actual information
-            },
-            Message::Settings => {
-                return Task::done(MainMessage::SetScreen(super::Screen::Settings));
             },
             Message::ShowMessageHistory(state) => {
                 self.show_side_bar.go_mut(state, self.now);

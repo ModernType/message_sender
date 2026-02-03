@@ -1,6 +1,6 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use derive_more::Display;
-use iced::{Alignment, Animation, Border, Color, Element, Font, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, opaque, progress_bar, space, svg, text, tooltip}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, opaque, space, svg, text, tooltip}};
 
 use crate::{icon, messangers::{signal::SignalMessage, whatsapp}, ui::{AppData, Screen, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
 

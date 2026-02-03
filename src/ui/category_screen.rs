@@ -1,14 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use iced::{Alignment, Border, Font, Length, Pixels};
+use iced::{Border, Font, Length, Pixels};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, container, scrollable, space, svg, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, container, scrollable, space, text, text_input};
 
-use crate::icon;
 use crate::message::SendMode;
 use crate::messangers::Key;
 use crate::send_categories::SendCategory;
-use crate::ui::{AppData, Message as MainMessage, icons};
+use crate::ui::{AppData, Message as MainMessage};
 use crate::ui::ext::PushMaybe;
 use crate::ui::main_screen::Group;
 

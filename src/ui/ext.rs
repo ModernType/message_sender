@@ -23,6 +23,7 @@ impl_push_maybe!(Stack);
 
 pub trait ColorExt {
     fn lighter(self, amount: f32) -> Self;
+    #[allow(dead_code)]
     fn darker(self, amount: f32) -> Self;
 }
 

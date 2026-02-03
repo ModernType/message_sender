@@ -285,7 +285,7 @@ async fn send_message(
                         send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
                         break;
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
                         // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
                         tokio::time::sleep(Duration::from_millis(2000)).await;
@@ -421,7 +421,7 @@ async fn delete_message(
                     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
                     break;
                 }
-                Err(e) => {
+                Err(_e) => {
                     message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
                     // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
                     tokio::time::sleep(Duration::from_millis(2000)).await;
@@ -497,7 +497,7 @@ async fn edit_message(
                     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
                     break;
                 }
-                Err(e) => {
+                Err(_e) => {
                     message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
                     // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
                     tokio::time::sleep(Duration::from_millis(2000)).await;

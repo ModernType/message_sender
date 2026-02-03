@@ -21,18 +21,6 @@ pub struct NetworkInfo {
     pub name: String,
 }
 
-
-impl NetworkInfo {
-    pub fn new(id: u64, name: String) -> Self {
-        Self {
-            id, 
-            name,
-            freq: String::new(),
-            crypt_mode: String::new(),
-        }
-    }
-}
-
 impl From<FullNetworkInfo> for NetworkInfo {
     fn from(value: FullNetworkInfo) -> Self {
         Self {
