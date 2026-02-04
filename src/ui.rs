@@ -224,7 +224,7 @@ impl App {
                 }
             },
             Message::Synced => {
-                Task::done(main_screen::Message::UpdateGroups.into())
+                Task::done(Message::UpdateGroupList)
             }
             Message::SetupSignalWorker(tx) => {
                 let (task_tx, task_rx) = futures::channel::mpsc::unbounded();
@@ -384,18 +384,18 @@ impl App {
         .push(
             Row::new()
             .push(
-                self.side_menu.minimized(self.cur_screen).map(Into::into)
+                self.side_menu.minimized(self.cur_screen, &self.data).map(Into::into)
             )
             .push(
                 match self.cur_screen {
-                    Screen::Main => self.main_scr.view(&self.data, self.is_tutorial()).map(Into::into),
+                    Screen::Main => self.main_scr.view(self.is_tutorial()).map(Into::into),
                     Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
                     Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
                 }
             )
         )
         .push(
-            self.side_menu.view(self.cur_screen).map(Into::into)
+            self.side_menu.view(self.cur_screen, &self.data).map(Into::into)
         )
         .push(
             self.notification.view(self.now)

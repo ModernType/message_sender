@@ -1,15 +1,13 @@
 use iced::{Alignment, Border, Element, Font, Length, Padding, Task, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
 use rfd::FileHandle;
 
-use crate::{send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
+use crate::{send_categories::parse_networks_data, ui::{AppData, theme::Theme}};
 
 use super::Message as MainMessage;
 
 #[derive(Debug, Clone)]
 pub enum Message {
     ToggleMarkdown(bool),
-    ToggleParallel(bool),
-    ToggleShowGroups(bool),
     ToggleAutoupdateGroups(bool),
     ToggleMessageFile(bool),
     ToggleAutoSend(bool),
@@ -44,12 +42,6 @@ impl SettingsScreen {
         match message {
             Message::ToggleMarkdown(markdown) => {
                 data.markdown = markdown;
-            },
-            Message::ToggleParallel(parallel) => {
-                data.parallel = parallel;
-            },
-            Message::ToggleShowGroups(state) => {
-                data.show_groups = state;
             },
             Message::ToggleAutoupdateGroups(state) => {
                 data.autoupdate_groups = state;
@@ -188,11 +180,6 @@ impl SettingsScreen {
                             .on_toggle(Message::ToggleMessageFile)
                         )
                         .push(
-                            checkbox(data.show_groups)
-                            .label("Показувати список груп на головному екрані")
-                            .on_toggle(Message::ToggleShowGroups)
-                        )
-                        .push(
                             checkbox(data.autoupdate_groups)
                             .label("Автоматично оновлювати список груп з месенджерів")
                             .on_toggle(Message::ToggleAutoupdateGroups)
@@ -201,19 +188,6 @@ impl SettingsScreen {
                             checkbox(data.markdown)
                             .label("Використовувати форматування Markdown при надсиланні повідомлень")
                             .on_toggle(Message::ToggleMarkdown)
-                        )
-                        .push_maybe(
-                            {
-                                #[cfg(debug_assertions)]
-                                let comp_val = true;
-                                #[cfg(not(debug_assertions))]
-                                let comp_val = false;
-                                comp_val.then(||
-                                    checkbox(data.parallel)
-                                    .label("Здійснювати надсилання повідомлень паралельно (ЕКСПЕРИМЕНТАЛЬНО!!!)")
-                                    .on_toggle(Message::ToggleParallel)
-                                )
-                            }
                         )
                     )
                     .padding(20)

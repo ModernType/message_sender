@@ -1,8 +1,8 @@
 use std::time::Instant;
 use derive_more::Display;
-use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, opaque, space, svg, text, tooltip}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, widget::{Column, Row, Stack, button, container, opaque, space, svg, text, tooltip}};
 
-use crate::{icon, messangers::{signal::SignalMessage, whatsapp}, ui::{AppData, Screen, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
+use crate::{icon, message::OperatorMessage, message_server::AcceptedMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{GROUP_REFRESH_ICON, SIGNAL_ICON, WHATSAPP_ICON}}};
 
 use super::Message as MainMessage;
 
@@ -17,6 +17,8 @@ pub enum Message {
     ToggleSideMenu,
     SetSignalState(LinkState),
     SetWhatsappState(LinkState),
+    UpdateGroups,
+    MessageFile,
 }
 
 impl From<Message> for MainMessage {
@@ -84,10 +86,45 @@ impl SideMenu {
                     Task::none()
                 }
             },
+            Message::UpdateGroups => {
+                Task::done(MainMessage::UpdateGroupList)
+            },
+            Message::MessageFile => {
+                Task::future(async move {
+                    let path = match rfd::AsyncFileDialog::new()
+                    .add_filter("Файл повідомлень", &["json"])
+                    .set_title("Виберіть файл з повідомленнями")
+                    .pick_file()
+                    .await {
+                        Some(path) => path,
+                        None => return MainMessage::None,
+                    };
+
+                    let s = match tokio::fs::read_to_string(path.path()).await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("File read error: {}", &e);
+                            return notification!("Помилка зчитування файла: {}", e)
+                        },
+                    };
+
+                    let message = match serde_json::from_str::<Vec<OperatorMessage>>(&s) {
+                        Ok(msgs) => msgs.into_iter().map(AcceptedMessage::from).collect::<Vec<_>>(),
+                        Err(e) => {
+                            log::error!("Message parse error: {e}");
+                            let mut message = AcceptedMessage::from(s);
+                            message.autosend_overwrite = true;
+                            vec![message]
+                        }
+                    };
+
+                    MainMessage::AcceptMessage(message)
+                })
+            },
         }
     }
 
-    pub fn minimized(&self, selected_screen: Screen) -> Element<'_, Message> {
+    pub fn minimized(&self, selected_screen: Screen, data: &AppData) -> Element<'_, Message> {
         const BUTTON_PADDING: u32 = 5;
 
         container(
@@ -148,6 +185,23 @@ impl SideMenu {
                         text(format!("Whatsapp: {}", self.whatsapp_state))
                     )
                 )
+                .push_maybe(
+                    (!data.autoupdate_groups).then(|| sidebar_tooltip(
+                        button(
+                            svg(svg::Handle::from_memory(GROUP_REFRESH_ICON))
+                            .style(move |theme: &iced::Theme, _status| svg::Style {
+                                color: Some(theme.extended_palette().background.weaker.text),
+                            })
+                            .height(30)
+                            .width(Length::Shrink)
+                        )
+                        .on_press(Message::UpdateGroups)
+                        .style(button::subtle)
+                        .height(Length::Shrink)
+                        .padding(Padding::default().vertical(BUTTON_PADDING).horizontal(5)),
+                        "Оновити групи"
+                    ))
+                )
                 .push(
                     container(
                         space()
@@ -184,6 +238,30 @@ impl SideMenu {
                         "Канали надсилання"    
                     )
                 )
+                .push_maybe(
+                    data.message_file.then(|| container(
+                        space()
+                        .width(Length::Fill)
+                        .height(3)
+                    )
+                    .style(|theme: &iced::Theme| container::Style {
+                        background: Some(theme.extended_palette().background.neutral.color.into()),
+                        border: Border::default().rounded(1.5),
+                        ..Default::default()
+                    }))
+                )
+                .push_maybe(
+                    data.message_file.then(|| sidebar_tooltip(
+                        button(
+                            icon!(upload_file)
+                            .size(28)
+                        )
+                        .on_press(Message::MessageFile)
+                        .style(menu_button_style(false))
+                        .padding(Padding::default().vertical(BUTTON_PADDING).horizontal(5)),
+                        "Надіслати з файлу"    
+                    ))
+                )
                 .push(
                     space()
                     .height(Length::Fill)
@@ -211,7 +289,7 @@ impl SideMenu {
         .into()
     }
 
-    pub fn menu_content(&self, selected_screen: Screen) -> Element<'_, Message> {
+    pub fn menu_content(&self, selected_screen: Screen, data: &AppData) -> Element<'_, Message> {
         Column::new()
         .padding(Padding::default().horizontal(5).vertical(10))
         .spacing(20)
@@ -273,6 +351,22 @@ impl SideMenu {
                 false
             )
         )
+        .push_maybe(
+            (!data.autoupdate_groups).then(|| menu_button(
+                svg(svg::Handle::from_memory(GROUP_REFRESH_ICON))
+                    .style(move |theme: &iced::Theme, _status| svg::Style {
+                        color: Some(theme.extended_palette().background.weaker.text),
+                    })
+                    .width(30)
+                    .height(30), 
+                text("Оновити групи")
+                    .height(Length::Fill)
+                    .align_y(Alignment::Center)
+                    .size(self.open.interpolate(0.1, 16.0, self.now)), 
+                Some(Message::UpdateGroups),
+                false
+            ))
+        )
         .push(
             container(
                 space()
@@ -309,7 +403,34 @@ impl SideMenu {
                 Some(Message::Categories),
                 selected_screen == Screen::Categories
             )
+        )
+        .push_maybe(
+            data.message_file.then(|| container(
+                space()
+                .width(Length::Fill)
+                .height(3)
+            )
+            .style(|theme: &iced::Theme| container::Style {
+                background: Some(theme.extended_palette().background.neutral.color.into()),
+                border: Border::default().rounded(1.5),
+                ..Default::default()
+            })
+            // .padding(Padding::default().horizontal(horizontal))
+        )
             
+        )
+        .push_maybe(
+            data.message_file.then(|| menu_button(
+                icon!(upload_file)
+                    .size(28)
+                    .align_y(Alignment::Center),
+                text("Відправити з файлу")
+                .height(Length::Fill)
+                .align_y(Alignment::Center)
+                .size(self.open.interpolate(0.1, 16.0, self.now)),
+                Some(Message::MessageFile),
+                false
+            ))
         )
         .push(
             space()
@@ -332,7 +453,7 @@ impl SideMenu {
         .into()
     }
 
-    pub fn view(&self, selected_screen: Screen) -> Element<'_, Message> {
+    pub fn view(&self, selected_screen: Screen, data: &AppData) -> Element<'_, Message> {
         Stack::new()
         .push(
             container(
@@ -342,14 +463,13 @@ impl SideMenu {
             )
             .style(|_| container::Style {
                 background: Some(Color { a: self.open.interpolate(0.0, 0.4, self.now), ..Color::BLACK }.into()),
-                border: Border::default().rounded(Radius::default().right(20)),
                 ..Default::default()
             })
         )
         .push(
             opaque(
                 container(
-                    self.menu_content(selected_screen)
+                    self.menu_content(selected_screen, data)
                 )
                 .width(
                     if self.open.is_animating(self.now) || self.open.value() {

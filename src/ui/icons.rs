@@ -3,6 +3,7 @@ use iced::Font;
 pub const FONT: Font = Font::with_name("Material Icons");
 pub const SIGNAL_ICON: &[u8] = include_bytes!("icons/signal.svg");
 pub const WHATSAPP_ICON: &[u8] = include_bytes!("icons/whatsapp.svg");
+pub const GROUP_REFRESH_ICON: &[u8] = include_bytes!("icons/group_refresh.svg");
 
 
 #[macro_export]

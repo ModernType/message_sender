@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, container, qr_code, responsive, scrollable, space, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{icon, message::{OperatorMessage, SendMode}, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage}, notification, ui::{AppData, message_history::SendMessageInfo}};
+use crate::{icon, message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage}, ui::{AppData, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -17,14 +17,12 @@ pub enum Message {
     SendMessage(String, Option<String>, Option<u64>),
     SendMessagePressed,
     SetGroups(Vec<(Key, String)>),
-    UpdateGroups,
     UpdateMessageHistory,
     ShowMessageHistory(bool),
     DeleteMessage(usize),
     EditMessage(usize),
     CancelEdit,
     ConfirmEdit,
-    MessageFile,
     NextMessage,
     Cancel(usize),
     RefreshMessage(usize),
@@ -203,9 +201,6 @@ impl MainScreen {
                     .or_insert(Group { title, send_mode: SendMode::Off });
                 }
             },
-            Message::UpdateGroups => {
-                return Task::done(MainMessage::UpdateGroupList);
-            },
             Message::UpdateMessageHistory => {
                 // Makes window redraw to display actual information
             },
@@ -283,38 +278,6 @@ impl MainScreen {
                     self.show_side_bar.go_mut(false, now);
                 }
             },
-            Message::MessageFile => {
-                return Task::future(async move {
-                    let path = match rfd::AsyncFileDialog::new()
-                    .add_filter("Файл повідомлень", &["json"])
-                    .set_title("Виберіть файл з повідомленнями")
-                    .pick_file()
-                    .await {
-                        Some(path) => path,
-                        None => return MainMessage::None,
-                    };
-
-                    let s = match tokio::fs::read_to_string(path.path()).await {
-                        Ok(s) => s,
-                        Err(e) => {
-                            log::error!("File read error: {}", &e);
-                            return notification!("Помилка зчитування файла: {}", e)
-                        },
-                    };
-
-                    let message = match serde_json::from_str::<Vec<OperatorMessage>>(&s) {
-                        Ok(msgs) => msgs.into_iter().map(AcceptedMessage::from).collect::<Vec<_>>(),
-                        Err(e) => {
-                            log::error!("Message parse error: {e}");
-                            let mut message = AcceptedMessage::from(s);
-                            message.autosend_overwrite = true;
-                            vec![message]
-                        }
-                    };
-
-                    MainMessage::AcceptMessage(message)
-                })
-            },
         }
 
         Task::none()
@@ -358,7 +321,7 @@ impl MainScreen {
         .into()
     }
 
-    fn side_bar(&self, message_file: bool) -> Element<'_, Message> {
+    fn side_bar(&self) -> Element<'_, Message> {
         Element::new(
             Row::new()
             .align_y(Alignment::Center)
@@ -389,13 +352,13 @@ impl MainScreen {
                 .on_press(Message::ShowMessageHistory(!self.show_side_bar.value()))   
             )
             .push(
-                self.main_part(message_file)
+                self.main_part()
             )
             .height(Length::Fill)
         )
     }
 
-    fn main_part(&self, message_file: bool) -> Element<'_, Message> {
+    fn main_part(&self) -> Element<'_, Message> {
         let mut col = Column::new()
         .width(self.show_side_bar.interpolate(0., 450., self.now))
         .height(Length::Fill)
@@ -527,21 +490,6 @@ impl MainScreen {
                                 ).then_some(Message::SendMessagePressed)
                             )
                         )
-                        .push_maybe(
-                            message_file.then(||
-                                button(
-                                    text("Надіслати з файлу")
-                                    .center()
-                                    .width(Length::Fill)
-                                    .font(iced::Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..iced::Font::DEFAULT
-                                    })
-                                )
-                                .style(button::subtle)
-                                .on_press(Message::MessageFile)
-                            )
-                        )
                     )
                 }
             )
@@ -589,7 +537,7 @@ impl MainScreen {
         .into()
     }
 
-    pub fn view<'a>(&'a self, data: &'a AppData, tutorial: bool) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, tutorial: bool) -> Element<'a, Message> {
         Row::new()
         .spacing(7)
         .push(
@@ -603,9 +551,9 @@ impl MainScreen {
         .push_maybe(
             (self.show_side_bar.is_animating(self.now) || self.show_side_bar.value()).then(|| {
                 #[cfg(debug_assertions)]
-                let el = self.side_bar(data.message_file);
+                let el = self.side_bar();
                 #[cfg(not(debug_assertions))]
-                let el = self.main_part(data.message_file);
+                let el = self.main_part();
                 el
             })
         )
