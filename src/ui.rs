@@ -16,7 +16,7 @@ pub mod settings_screen;
 pub mod message_history;
 pub mod category_screen;
 pub mod side_menu;
-mod icons;
+pub mod icons;
 mod ext;
 mod theme;
 
@@ -183,7 +183,7 @@ impl App {
                         keyboard::Key::Named(named) => {
                             match named {
                                 keyboard::key::Named::Escape => match self.cur_screen {
-                                    Screen::Categories | Screen::Settings => return Task::done(Message::SetScreen(Screen::Main)),
+                                    Screen::Categories => return self.category_scr.update(category_screen::Message::Empty, &mut self.data),
                                     _ => ()
                                 }
                                 keyboard::key::Named::Enter if modifiers.command() => {

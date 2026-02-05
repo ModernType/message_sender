@@ -1,14 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
-use iced::{Border, Font, Length, Pixels};
+use iced::{Alignment, Border, Color, Font, Length, Padding, Pixels, Shadow, Vector};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, container, scrollable, space, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, container, mouse_area, scrollable, space, text, text_input};
 
+use crate::icon;
 use crate::message::SendMode;
 use crate::messangers::Key;
-use crate::send_categories::SendCategory;
+use crate::send_categories::{NetworkInfo, SendCategory};
 use crate::ui::{AppData, Message as MainMessage};
-use crate::ui::ext::PushMaybe;
 use crate::ui::main_screen::Group;
 
 
@@ -33,6 +33,7 @@ pub enum Message {
     ToggleUseGeneral(usize, bool),
     NetworkSerch(String),
     GroupSearch(String),
+    Empty,
 }
 
 impl From<Message> for MainMessage {
@@ -79,6 +80,7 @@ impl CategoryScreen {
                 else {
                     self.selected_category = Some(index)
                 }
+                self.new_category_name = None;
             },
             Message::CategoryDelete(index) => {
                 if self.selected_category.is_some() {
@@ -115,6 +117,10 @@ impl CategoryScreen {
             Message::GroupSearch(s) => {
                 self.group_search = s
             },
+            Message::Empty => {
+                self.new_category_name = None;
+                self.selected_category = None;
+            }
         }
 
         Task::none()
@@ -134,91 +140,204 @@ impl CategoryScreen {
             .height(15)
         )
         .push(
-            button(
-                text("Додати")
-                .width(Length::Fill)
-                .center()
-            )
-            .on_press(Message::AddCategory)
-        )
-        .push_maybe(
-            self.new_category_name.as_ref()
-            .map(
-                |name| text_input("Назва категорії", name)
-                .on_input(Message::EditNewName)
-                .on_submit(Message::AddCategory)
-                .id(self.edit_new_name_id.clone())
+            self.new_category_name.as_ref().map_or_else(
+                || -> Element<'_, _> {
+                    my_button(
+                    "Додати",
+                    Some(icon!(add).size(26)),
+                    false
+                    )
+                    .width(Length::Fill)
+                    .on_press(Message::AddCategory)
+                    .into()
+                },
+                |name| Row::new()
+                .spacing(3)
+                .push(
+                    text_input("Назва категорії", name)
+                    .on_input(Message::EditNewName)
+                    .on_submit(Message::AddCategory)
+                    .id(self.edit_new_name_id.clone())
+                )
+                .push(
+                    my_button(icon!(add), None::<Element<'_, Message>>, false)
+                    .on_press(Message::AddCategory)
+                )
+                .into()
             )
         )
         .push(
             space()
             .height(15)
-        )
-        .push(
-            button(
-                text("Загальна")
-                .width(Length::Fill)
-                .center()
-            )
-            .on_press(Message::ShowGeneral)
-            .style(
-                if self.selected_category.is_none() {
-                    button::primary
-                }
-                else {
-                    button::subtle
-                }
-            )
         );
 
-        scrollable(
-            data.categories.iter()
-            .enumerate()
-            .fold(
-                col,
-                |col, (index, category)| {
-                    col.push(
-                        Row::new()
-                        .spacing(3)
-                        .height(Length::Shrink)
-                        .push(
+        mouse_area(
+            scrollable(
+                data.categories.iter()
+                .enumerate()
+                .fold(
+                    col,
+                    |col, (index, category)| {
+                        let selected = if let Some(sel_index) = self.selected_category && sel_index == index {
+                            true
+                        }
+                        else {
+                            false
+                        };
+                        col.push(
                             button(
-                                text(category.name())
-                                .width(Length::Fill)
-                                .center()
+                                Row::new()
+                                .spacing(3)
+                                .height(Length::Shrink)
+                                .align_y(Alignment::Center)
+                                .push(
+                                    text(category.name())
+                                    .width(Length::Fill)
+                                    .center()
+                                )
+                                .push(
+                                    button(
+                                        // svg(svg::Handle::from_memory(icons::DELETE))
+                                        icon!(delete)
+                                        .size(28)
+                                    )
+                                    .style(|theme: &iced::Theme, status| button::Style {
+                                        text_color: match status {
+                                            button::Status::Active => theme.extended_palette().danger.base.color.into(),
+                                            _ => theme.extended_palette().danger.weak.color.into(),
+                                        },
+                                        ..button::text(theme, status)
+                                    })
+                                    .padding(0)
+                                    .on_press(Message::CategoryDelete(index))
+                                )
                             )
                             .style(
-                                if let Some(sel_index) = self.selected_category && sel_index == index {
-                                    button::primary
-                                }
-                                else {
-                                    button::subtle
-                                }
+                                button_style(selected)
                             )
-                            .width(Length::Fill)
                             .on_press(Message::CategoryToggled(index))
                         )
-                        .push(
-                            button(
-                                // svg(svg::Handle::from_memory(icons::DELETE))
-                                text("X")
-                                .width(Length::Shrink)
-                            )
-                            .width(Length::Shrink)
-                            .style(button::subtle)
-                            .on_press(Message::CategoryDelete(index))
-                        )
-                    )
-                }
+                    }
+                )
             )
+            .width(Length::Fill)
+            .height(Length::Fill)
         )
-        .width(Length::Fill)
-        .height(Length::Fill)
+        .on_press(Message::Empty)
         .into()
     }
 
     fn general_groups<'a>(&'a self, groups: &'a HashMap<Key, Group>) -> Element<'a, Message> {
-        scrollable(
+        fn sort((k1, g1): &(&Key, &Group), (k2, g2): &(&Key, &Group)) -> std::cmp::Ordering {
+            let v = g1.title.cmp(&g2.title);
+            if v == std::cmp::Ordering::Equal {
+                k1.cmp(k2)
+            }
+            else {
+                v
+            }
+        }
+
+        macro_rules! vec_to_col {
+            ($name:ident, $map:expr) => {
+                let $name = $name.into_iter().fold(
+                    Column::new()
+                    .spacing(5),
+                    |col, (key, group)| col.push(($map)(key, group))
+                );
+            };
+        }
+        
+        let mut added = Vec::new();
+        let mut other = Vec::new();
+
+        for (k, g) in groups.iter().filter(|(_, g)| g.title.contains(&self.group_search)) {
+            if g.active() {
+                added.push((k, g));
+            }
+            else {
+                other.push((k, g));
+            }
+        }
+        added.sort_unstable_by(sort);
+        other.sort_unstable_by(sort);
+
+        vec_to_col!(added, |key: &'a Key, group: &'a Group| -> container::Container<'a, Message> {
+            container(
+                Row::new()
+                .width(Length::Fill)
+                .spacing(5)
+                .padding(5)
+                .align_y(Alignment::Center)
+                .push(
+                    key.icon()
+                    .height(22)
+                    .width(Length::Shrink)
+                )
+                .push(
+                    text(&group.title)
+                    .width(Length::Fill)
+                )
+                .push(
+                    button(
+                        icon!(graphic_eq)
+                        .size(22)
+                    )
+                    .padding(Padding::default().horizontal(3))
+                    .style(
+                        match group.send_mode {
+                            SendMode::Frequency => Box::new(button_style(true)),
+                            _ => Box::new(button::text) as Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>,
+                        }
+                    )
+                    .on_press(Message::ToggleGeneralGroup(key.clone(), match group.send_mode {
+                            SendMode::Frequency => SendMode::Normal,
+                            _ => SendMode::Frequency,
+                        }))
+                )
+                .push(
+                    button(
+                        icon!(remove)
+                        .size(22)
+                    )
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::ToggleGeneralGroup(key.clone(), SendMode::Off))
+                )
+            )
+            .style(entry_style)
+        });
+
+        vec_to_col!(other, |key: &'a Key, group: &'a Group| -> container::Container<'a, Message> {
+            container(
+                Row::new()
+                .width(Length::Fill)
+                .padding(5)
+                .spacing(5)
+                .align_y(Alignment::Center)
+                .push(
+                    key.icon()
+                    .height(22)
+                    .width(Length::Shrink)
+                )
+                .push(
+                    text(&group.title)
+                    .width(Length::Fill)
+                )
+                .push(
+                    button(
+                        icon!(add)
+                        .size(22)
+                    )
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::ToggleGeneralGroup(key.clone(), SendMode::Normal))
+                )
+            )
+            .style(entry_style)
+        });
+
+        container(
             Column::new()
             .spacing(7)
             .padding(10)
@@ -233,130 +352,144 @@ impl CategoryScreen {
                 .width(Length::Fill)
             )
             .push(
-                text("Signal").width(Length::Fill).center()
+                space()
+                .height(15)
             )
-            .push({
-                let mut groups = groups.iter()
-                .filter_map(|(key, group)| match key {
-                    Key::Signal(key) if group.title.contains(&self.group_search) => Some((key, group)),
-                    _ => None
-                })
-                .collect::<Vec<_>>();
-                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                    checkbox(group.active())
-                    .label(&group.title)
-                    .on_toggle(move |_| Message::ToggleGeneralGroup(Key::Signal(*key), group.send_mode.next()))
-                    .icon(checkbox::Icon {
-                        font: Font::with_name("Material Icons"),
-                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
-                                    else { '\u{e5ca}' },
-                        size: Some(Pixels::from(14)),
-                        line_height: text::LineHeight::default(),
-                        shaping: text::Shaping::Basic,
-                    })
-                ))
-            })
             .push(
-                    text("Whatsapp").width(Length::Fill).center()
-            )
-            .push({
-                let mut groups = groups.iter()
-                .filter_map(|(key, group)| match key {
-                    Key::Whatsapp(key) if group.title.contains(&self.group_search) => Some((key, group)),
-                    _ => None
-                })
-                .collect::<Vec<_>>();
-                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                    checkbox(group.active())
-                    .label(&group.title)
-                    .on_toggle(move |_| Message::ToggleGeneralGroup(Key::Whatsapp(key.clone()), group.send_mode.next()))
-                    .icon(checkbox::Icon {
-                        font: Font::with_name("Material Icons"),
-                        code_point: if let SendMode::Frequency = group.send_mode { '\u{e1b8}' }
-                                    else { '\u{e5ca}' },
-                        size: Some(Pixels::from(14)),
-                        line_height: text::LineHeight::default(),
-                        shaping: text::Shaping::Basic,
-                    })
-                ))
-            })
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|theme: &iced::Theme, status| scrollable::Style {
-            container: container::Style {
-                background: Some(theme.extended_palette().background.weakest.color.into()),
-                border: Border::default().rounded(20),
-                ..Default::default()
-            },
-            ..scrollable::default(theme, status)
-        })
-        .into()
-    }
-
-    fn general_networks<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
-        let col = Column::new()
-        .spacing(3)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(10)
-        .push(
-            text("Мережі")
-            .center()
-            .width(Length::Fill)
-        )
-        .push(
-            text_input("Пошук", &self.network_search)
-            .on_input(Message::NetworkSerch)
-            .width(Length::Fill)
-        );
-        
-        let mut checks = data.networks.keys().collect::<HashSet<_>>();
-
-        for cat in data.categories.iter() {
-            checks.retain(|id| !cat.networks.contains(id));
-        }
-
-        let networks = if self.network_search.is_empty() {
-            data.networks.values()
-            .map(|net| (net.id, &net.name))
-            .collect::<Vec<_>>()
-        }
-        else {
-            data.networks.values()
-            .filter(|net| net.name.contains(&self.network_search))
-            .map(|net| (net.id, &net.name))
-            .collect::<Vec<_>>()
-        };
-
-        scrollable(
-            networks.into_iter().fold(
-                col,
-                |col, (id, name)|
-                col.push(
-                    checkbox(checks.contains(&id))
-                    .label(name)
+                scrollable(
+                    Column::new()
+                    .spacing(25)
+                    .align_x(Alignment::Center)
+                    .push("Відправляти")
+                    .push(added)
+                    .push("Не відправляти")
+                    .push(other)
                 )
             )
-        )
-        .style(|theme: &iced::Theme, status| scrollable::Style {
-            container: container::Style {
-                background: Some(theme.extended_palette().background.weakest.color.into()),
+            .width(Length::Fill)
+            .height(Length::Fill)
+        )        
+        .style(|theme: &iced::Theme| container::Style {
+                background: Some(theme.extended_palette().background.weaker.color.into()),
                 border: Border::default().rounded(20),
                 ..Default::default()
-            },
-            ..scrollable::default(theme, status)
         })
-        .width(Length::Fill)
-        .height(Length::Fill)
         .into()
     }
 
     fn category_groups<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
+        fn sort((k1, g1): &(&Key, &Group), (k2, g2): &(&Key, &Group)) -> std::cmp::Ordering {
+            let v = g1.title.cmp(&g2.title);
+            if v == std::cmp::Ordering::Equal {
+                k1.cmp(k2)
+            }
+            else {
+                v
+            }
+        }
+
+        macro_rules! vec_to_col {
+            ($name:ident, $map:expr) => {
+                let $name = $name.into_iter().fold(
+                    Column::new()
+                    .spacing(5),
+                    |col, (key, group)| col.push(($map)(key, group))
+                );
+            };
+        }
+        
+        let mut added = Vec::new();
+        let mut other = Vec::new();
         let category = &data.categories[index];
-        scrollable(
+
+        for (k, g) in data.groups.iter().filter(|(_, g)| g.title.contains(&self.group_search)) {
+            if let Some(mode) = category.groups.get(k) && mode.active() {
+                added.push((k, g));
+            }
+            else {
+                other.push((k, g));
+            }
+        }
+        added.sort_unstable_by(sort);
+        other.sort_unstable_by(sort);
+
+        vec_to_col!(added, |key: &'a Key, group: &'a Group| -> container::Container<'a, Message> {
+            let mode = category.groups.get(key).map_or_else(Default::default, Clone::clone);
+            container(
+                Row::new()
+                .width(Length::Fill)
+                .spacing(5)
+                .padding(5)
+                .align_y(Alignment::Center)
+                .push(
+                    key.icon()
+                    .height(22)
+                    .width(Length::Shrink)
+                )
+                .push(
+                    text(&group.title)
+                    .width(Length::Fill)
+                )
+                .push(
+                    button(
+                        icon!(graphic_eq)
+                        .size(22)
+                    )
+                    .padding(Padding::default().horizontal(3))
+                    .style(
+                        match mode {
+                            SendMode::Frequency => Box::new(button_style(true)),
+                            _ => Box::new(button::text) as Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>,
+                        }
+                    )
+                    .on_press(Message::ToggleGroup(index, key.clone(), match mode {
+                            SendMode::Frequency => SendMode::Normal,
+                            _ => SendMode::Frequency,
+                        }))
+                )
+                .push(
+                    button(
+                        icon!(remove)
+                        .size(22)
+                    )
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::ToggleGroup(index, key.clone(), SendMode::Off))
+                )
+            )
+            .style(entry_style)
+        });
+
+        vec_to_col!(other, |key: &'a Key, group: &'a Group| -> container::Container<'a, Message> {
+            container(
+                Row::new()
+                .width(Length::Fill)
+                .padding(5)
+                .spacing(5)
+                .align_y(Alignment::Center)
+                .push(
+                    key.icon()
+                    .height(22)
+                    .width(Length::Shrink)
+                )
+                .push(
+                    text(&group.title)
+                    .width(Length::Fill)
+                )
+                .push(
+                    button(
+                        icon!(add)
+                        .size(22)
+                    )
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::ToggleGroup(index, key.clone(), SendMode::Normal))
+                )
+            )
+            .style(entry_style)
+        });
+
+        container(
             Column::new()
             .spacing(7)
             .padding(10)
@@ -371,115 +504,136 @@ impl CategoryScreen {
                 .width(Length::Fill)
             )
             .push(
-                text("Signal").width(Length::Fill).center()
+                space()
+                .height(15)
             )
-            .push({
-                let mut groups = data.groups.iter()
-                .filter_map(|(key, group)| match key {
-                    Key::Signal(key) if group.title.contains(&self.group_search) => Some((key, group)),
-                    _ => None
-                })
-                .collect::<Vec<_>>();
-                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                    {
-                        let send_mode = category.groups.get(&Key::Signal(*key)).cloned().unwrap_or_default();
-                        checkbox(send_mode.active())
-                        .label(&group.title)
-                        .on_toggle(move |_| Message::ToggleGroup(index, Key::Signal(*key), send_mode.next()))
-                        .icon(checkbox::Icon {
-                            font: Font::with_name("Material Icons"),
-                            code_point: if let SendMode::Frequency = send_mode { '\u{e1b8}' }
-                                        else { '\u{e5ca}' },
-                            size: Some(Pixels::from(14)),
-                            line_height: text::LineHeight::default(),
-                            shaping: text::Shaping::Basic,
-                        })
-                    }
-                ))
-            })
             .push(
-                    text("Whatsapp").width(Length::Fill).center()
+                scrollable(
+                    Column::new()
+                    .spacing(25)
+                    .align_x(Alignment::Center)
+                    .push("Відправляти")
+                    .push(added)
+                    .push("Не відправляти")
+                    .push(other)
+                )
             )
-            .push({
-                let mut groups = data.groups.iter()
-                .filter_map(|(key, group)| match key {
-                    Key::Whatsapp(key) if group.title.contains(&self.group_search) => Some((key, group)),
-                    _ => None
-                })
-                .collect::<Vec<_>>();
-                groups.sort_unstable_by(|(_, prev), (_, next)| prev.title.cmp(&next.title));
-                groups.into_iter().fold(Column::new().spacing(3), |col, (key, group)| col.push(
-                    {
-                        let send_mode = category.groups.get(&Key::Whatsapp(key.clone())).cloned().unwrap_or_default();
-                        checkbox(send_mode.active())
-                        .label(&group.title)
-                        .on_toggle(move |_| Message::ToggleGroup(index, Key::Whatsapp(key.clone()), send_mode.next()))
-                        .icon(checkbox::Icon {
-                            font: Font::with_name("Material Icons"),
-                            code_point: if let SendMode::Frequency = send_mode { '\u{e1b8}' }
-                                        else { '\u{e5ca}' },
-                            size: Some(Pixels::from(14)),
-                            line_height: text::LineHeight::default(),
-                            shaping: text::Shaping::Basic,
-                        })
-                    }
-                ))
-            })
-        )
-        .style(|theme: &iced::Theme, status| scrollable::Style {
-            container: container::Style {
-                background: Some(theme.extended_palette().background.weakest.color.into()),
+            .width(Length::Fill)
+            .height(Length::Fill)
+        )        
+        .style(|theme: &iced::Theme| container::Style {
+                background: Some(theme.extended_palette().background.weaker.color.into()),
                 border: Border::default().rounded(20),
                 ..Default::default()
-            },
-            ..scrollable::default(theme, status)
         })
-        .width(Length::Fill)
-        .height(Length::Fill)
         .into()
     }
 
     fn category_networks<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
-        let mut all_networks = data.networks.iter()
-        .filter(|(_, info)| self.network_search.is_empty() || info.name.contains(&self.network_search))
-        .collect::<Vec<_>>();
-        all_networks.sort_unstable_by(|(_, info1), (_, info2)| info1.name.cmp(&info2.name));
-        let category = &data.categories[index];
+        let mut active = Vec::new();
+        let mut other = Vec::new();
 
-        scrollable(
-            all_networks.into_iter()
-            .fold(
-                Column::new()
-                .spacing(7)
-                .padding(10)
+        macro_rules! vec_to_col {
+            ($name:ident, $map:expr) => {
+                let $name = $name.into_iter().fold(
+                    Column::new()
+                    .spacing(5),
+                    |col, (key, group)| col.push(($map)(key, group))
+                );
+            };
+        }
+
+        let category = &data.categories[index];
+        for (id, network) in data.networks.iter() {
+            if category.networks.contains(id) {
+                active.push((id, network))
+            }
+            else {
+                other.push((id, network))
+            }
+        }
+
+        vec_to_col!(active, |id: &'a u64, network: &'a NetworkInfo| -> container::Container<'a, _> {
+            container(
+                Row::new()
+                .width(Length::Fill)
+                .padding(5)
+                .spacing(5)
+                .align_y(Alignment::Center)
                 .push(
-                    text("Мережі")
-                    .center()
+                    text(&network.name)
                     .width(Length::Fill)
                 )
                 .push(
-                    text_input("Пошук", &self.network_search)
-                    .on_input(Message::NetworkSerch)
-                    .width(Length::Fill)
-                ),
-                |col, (id, _)| col.push(
-                    checkbox(category.networks.contains(id))
-                    .label(&data.networks.get(id).unwrap().name)
-                    .on_toggle(move |state| Message::ToggleNetwork(index, *id, state))
+                    button(
+                        icon!(remove)
+                        .size(22)
+                    )
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::ToggleNetwork(index, *id, false))
                 )
             )
+            .style(entry_style)
+        });
+
+        vec_to_col!(other, |id: &'a u64, network: &'a NetworkInfo| -> container::Container<'a, _> {
+            container(
+                Row::new()
+                .width(Length::Fill)
+                .padding(5)
+                .spacing(5)
+                .align_y(Alignment::Center)
+                .push(
+                    text(&network.name)
+                    .width(Length::Fill)
+                )
+                .push(
+                    button(
+                        icon!(add)
+                        .size(22)
+                    )
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::ToggleNetwork(index, *id, true))
+                )
+            )
+            .style(entry_style)
+        });
+
+        container(
+            Column::new()
+            .spacing(7)
+            .padding(10)
+            .push(
+                text("Мережі")
+                .center()
+                .width(Length::Fill)
+            )
+            .push(
+                text_input("Пошук", &self.network_search)
+                .on_input(Message::NetworkSerch)
+                .width(Length::Fill)
+            )
+            .push(
+                scrollable(
+                    Column::new()
+                    .spacing(15)
+                    .align_x(Alignment::Center)
+                    .push("Відправляти")
+                    .push(active)
+                    .push("Не відправляти")
+                    .push(other)
+                )
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
         )
-        .style(|theme: &iced::Theme, status| scrollable::Style {
-            container: container::Style {
-                background: Some(theme.extended_palette().background.weakest.color.into()),
+        .style(|theme: &iced::Theme| container::Style {
+                background: Some(theme.extended_palette().background.weaker.color.into()),
                 border: Border::default().rounded(20),
                 ..Default::default()
-            },
-            ..scrollable::default(theme, status)
         })
-        .width(Length::Fill)
-        .height(Length::Fill)
         .into()
     }
 
@@ -530,21 +684,68 @@ impl CategoryScreen {
                 Column::new()
                 .spacing(20)
                 .push(
-                    text("Загальна")
+                    text("Загальні")
                     .size(24)
                     .width(Length::Fill)
                     .center()
                 )
                 .push(
-                    Row::new()
-                    .spacing(20)
-                    .push(self.general_groups(&data.groups))
-                    .push(self.general_networks(data))
+                    self.general_groups(&data.groups)
                 )
                 .width(Length::FillPortion(3))
             )
         }
 
         main_row.into()
+    }
+}
+
+
+fn button_style(selected: bool) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let palette = theme.extended_palette();
+        let border = Border::default().rounded(10);
+        if selected {
+            button::Style {
+                border,
+                // shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 2.0, offset: Vector::new(0.0, 2.0) },
+                background: Some(palette.secondary.weak.color.into()),
+                text_color: palette.secondary.weak.text,
+                ..Default::default()
+            }
+        }
+        else {
+            button::Style {
+                border,
+                shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 2.0, offset: Vector::new(0.0, 2.0) },
+                ..button::subtle(theme, status)
+            }
+        }
+    }
+}
+
+fn my_button<'a, Message: 'a>(content: impl Into<Element<'a, Message>>, icon: Option<impl Into<Element<'a, Message>>>, selected: bool) -> button::Button<'a, Message> {
+    let content = if let Some(icon) = icon {
+        Row::new()
+        .align_y(Alignment::Center)
+        .spacing(5)
+        .push(icon)
+        .push(content)
+        .into()
+    }
+    else {
+        content.into()
+    };
+    button(content)
+    .style(button_style(selected))
+}
+
+fn entry_style(theme: &iced::Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(palette.background.base.color.into()),
+        border: Border::default().rounded(10),
+        shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 2.0, offset: Vector::new(0.0, 2.0) },
+        ..Default::default()
     }
 }
