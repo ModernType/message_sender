@@ -299,7 +299,7 @@ impl MainScreen {
             self.message_history.iter().enumerate().fold(
                 Column::new()
                 .padding(10)
-                .spacing(3)
+                .spacing(10)
                 .width(Length::Fill)
                 .height(Length::Fill),
                 |col, (idx, message_info)| {

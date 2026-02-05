@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use iced::border::Radius;
 use iced::{Alignment, Border, Color, Font, Length, Padding, Pixels, Shadow, Vector};
 use iced::{Element, Task};
 use iced::widget::{Column, Row, button, checkbox, container, mouse_area, scrollable, space, text, text_input};
@@ -348,6 +349,7 @@ impl CategoryScreen {
             )
             .push(
                 text_input("Пошук", &self.group_search)
+                .style(text_input_style)
                 .on_input(Message::GroupSearch)
                 .width(Length::Fill)
             )
@@ -358,6 +360,7 @@ impl CategoryScreen {
             .push(
                 scrollable(
                     Column::new()
+                    .padding(Padding::default().horizontal(15))
                     .spacing(25)
                     .align_x(Alignment::Center)
                     .push("Відправляти")
@@ -372,6 +375,7 @@ impl CategoryScreen {
         .style(|theme: &iced::Theme| container::Style {
                 background: Some(theme.extended_palette().background.weaker.color.into()),
                 border: Border::default().rounded(20),
+                shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), blur_radius: 4.0, offset: Vector::new(0.0, 3.0) },
                 ..Default::default()
         })
         .into()
@@ -500,6 +504,7 @@ impl CategoryScreen {
             )
             .push(
                 text_input("Пошук", &self.group_search)
+                .style(text_input_style)
                 .on_input(Message::GroupSearch)
                 .width(Length::Fill)
             )
@@ -510,6 +515,7 @@ impl CategoryScreen {
             .push(
                 scrollable(
                     Column::new()
+                    .padding(Padding::default().horizontal(15))
                     .spacing(25)
                     .align_x(Alignment::Center)
                     .push("Відправляти")
@@ -524,6 +530,7 @@ impl CategoryScreen {
         .style(|theme: &iced::Theme| container::Style {
                 background: Some(theme.extended_palette().background.weaker.color.into()),
                 border: Border::default().rounded(20),
+                shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), blur_radius: 4.0, offset: Vector::new(0.0, 3.0) },
                 ..Default::default()
         })
         .into()
@@ -612,12 +619,14 @@ impl CategoryScreen {
             )
             .push(
                 text_input("Пошук", &self.network_search)
+                .style(text_input_style)
                 .on_input(Message::NetworkSerch)
                 .width(Length::Fill)
             )
             .push(
                 scrollable(
                     Column::new()
+                    .padding(Padding::default().horizontal(15))
                     .spacing(15)
                     .align_x(Alignment::Center)
                     .push("Відправляти")
@@ -632,6 +641,7 @@ impl CategoryScreen {
         .style(|theme: &iced::Theme| container::Style {
                 background: Some(theme.extended_palette().background.weaker.color.into()),
                 border: Border::default().rounded(20),
+                shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), blur_radius: 4.0, offset: Vector::new(0.0, 3.0) },
                 ..Default::default()
         })
         .into()
@@ -747,5 +757,16 @@ fn entry_style(theme: &iced::Theme) -> container::Style {
         border: Border::default().rounded(10),
         shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 2.0, offset: Vector::new(0.0, 2.0) },
         ..Default::default()
+    }
+}
+
+fn text_input_style(theme: &iced::Theme, status: text_input::Status) -> text_input::Style {
+    text_input::Style {
+        border: Border {
+            color: theme.extended_palette().secondary.weak.color,
+            width: 1.0,
+            radius: Radius::new(5),
+        },
+        ..text_input::default(theme, status)
     }
 }

@@ -1,4 +1,4 @@
-use iced::{Alignment, Border, Element, Font, Length, Padding, Task, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
+use iced::{Alignment, Border, Color, Element, Font, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
 use rfd::FileHandle;
 
 use crate::{send_categories::parse_networks_data, ui::{AppData, theme::Theme}};
@@ -106,7 +106,8 @@ impl SettingsScreen {
     }
 
     pub fn view<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
-        Column::new()
+        container(
+            Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(Padding::ZERO.horizontal(20).top(20))
@@ -120,107 +121,141 @@ impl SettingsScreen {
         .push(
             scrollable(
                 Column::new()
-                .spacing(20)
+                    .spacing(20)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .align_x(Alignment::Center)
+                    .push(
+                        container(
+                            Column::new()
+                            .spacing(20)
+                            .width(Length::Fill)
+                            .push(
+                                Column::new()
+                                .push(
+                                    text("Адреса серверу для прийому повідомлень")
+                                )
+                                .push(
+                                    text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
+                                    .style(|theme: &iced::Theme, status| {
+                                        let mut default = text_input::Style {
+                                            border: Border::default().rounded(10).color(theme.extended_palette().secondary.weak.color).width(1),
+                                            ..text_input::default(theme, status)
+                                        };
+                                        if !self.address_correct {
+                                            default.border.color = theme.palette().danger;
+                                        }
+                                        default
+                                    })
+                                    .on_input(Message::RecieveAddressEditChanged)
+                                )
+                                .push(
+                                    text("Програму потрібно перезапустити, щоб зміни вступили у силу").font(Font { style:iced::font::Style::Italic, ..Default::default() })
+                                )
+                            )
+                            .push(
+                                column![
+                                    text("Кількість повідомлень в історії"),
+                                    text_input("Кількість повідомлень в історії", &data.history_len.to_string())
+                                    .style(|theme: &iced::Theme, status| text_input::Style {
+                                        border: Border::default().rounded(10).color(theme.extended_palette().secondary.weak.color).width(1),
+                                        ..text_input::default(theme, status)
+                                    })
+                                    .on_input(Message::HistoryLenEdit)
+                                ]
+                            )
+                        )
+                        .padding(20)
+                        .style(container_style)
+                    )
+                    .push(
+                        container(
+                            Column::new()
+                            .width(Length::Fill)
+                            .spacing(20)
+                            .push(
+                                checkbox(data.autosend)
+                                .label("Автоматична відправка повідомлень")
+                                .on_toggle(Message::ToggleAutoSend)
+                            )
+                            .push(
+                                checkbox(data.message_file)
+                                .label("Показувати функцію відправки повідомлення з файлу")
+                                .on_toggle(Message::ToggleMessageFile)
+                            )
+                            .push(
+                                checkbox(data.autoupdate_groups)
+                                .label("Автоматично оновлювати список груп з месенджерів")
+                                .on_toggle(Message::ToggleAutoupdateGroups)
+                            )
+                            .push(
+                                checkbox(data.markdown)
+                                .label("Використовувати форматування Markdown при надсиланні повідомлень")
+                                .on_toggle(Message::ToggleMarkdown)
+                            )
+                        )
+                        .padding(20)
+                        .style(container_style)
+                    )
+                    .push(
+                        container(
+                            Row::new()
+                            .spacing(5)
+                            .align_y(Alignment::Center)
+                            .push(
+                                text("Тема додатку")
+                                .center()
+                            )
+                            .push(
+                                pick_list(
+                                    Theme::ALL, 
+                                    Some(&data.theme),
+                                    Message::ThemeSelected
+                                )
+                                .style(|theme: &iced::Theme, status| {
+                                    let palette = theme.extended_palette();
+                                    pick_list::Style {
+                                        border: Border::default().rounded(10).color(palette.secondary.weak.color).width(1),
+                                        background: palette.background.base.color.into(),
+                                        ..pick_list::default(theme, status)
+                                    }
+                                })
+                            )
+                        )
+                        .padding(10)
+                        .center_x(Length::Fill)
+                        .style(container_style)
+                    )
+                    .push(
+                        button("Завантажити список мереж")
+                        .on_press(Message::ChooseNetworkFile)
+                        .style(|theme: &iced::Theme, status| {
+                            let border = Border::default().rounded(10);
+                            button::Style {
+                                border,
+                                shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
+                                ..button::primary(theme, status)
+                            }
+                        })
+                    )
+                )
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .align_x(Alignment::Center)
-                .push(
-                    container(
-                        Column::new()
-                        .spacing(20)
-                        .width(Length::Fill)
-                        .push(
-                            Column::new()
-                            .push(
-                                text("Адреса серверу для прийому повідомлень")
-                            )
-                            .push(
-                                text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
-                                .style(|theme, status| {
-                                    let mut default = text_input::default(theme, status);
-                                    if !self.address_correct {
-                                        default.border.color = theme.palette().danger;
-                                    }
-                                    default
-                                })
-                                .on_input(Message::RecieveAddressEditChanged)
-                            )
-                            .push(
-                                text("Програму потрібно перезапустити, щоб зміни вступили у силу").font(Font { style:iced::font::Style::Italic, ..Default::default() })
-                            )
-                        )
-                        .push(
-                            column![
-                                text("Кількість повідомлень в історії"),
-                                text_input("Кількість повідомлень в історії", &data.history_len.to_string())
-                                .on_input(Message::HistoryLenEdit)
-                            ]
-                        )
-                    )
-                    .padding(20)
-                    .style(|theme: &iced::Theme| container::Style {
-                        background: Some(theme.extended_palette().background.weakest.color.into()),
-                        border: Border::default().rounded(20),
-                        ..Default::default()
-                    })
-                )
-                .push(
-                    container(
-                        Column::new()
-                        .width(Length::Fill)
-                        .spacing(20)
-                        .push(
-                            checkbox(data.autosend)
-                            .label("Автоматична відправка повідомлень")
-                            .on_toggle(Message::ToggleAutoSend)
-                        )
-                        .push(
-                            checkbox(data.message_file)
-                            .label("Показувати функцію відправки повідомлення з файлу")
-                            .on_toggle(Message::ToggleMessageFile)
-                        )
-                        .push(
-                            checkbox(data.autoupdate_groups)
-                            .label("Автоматично оновлювати список груп з месенджерів")
-                            .on_toggle(Message::ToggleAutoupdateGroups)
-                        )
-                        .push(
-                            checkbox(data.markdown)
-                            .label("Використовувати форматування Markdown при надсиланні повідомлень")
-                            .on_toggle(Message::ToggleMarkdown)
-                        )
-                    )
-                    .padding(20)
-                    .style(|theme: &iced::Theme| container::Style {
-                        background: Some(theme.extended_palette().background.weakest.color.into()),
-                        border: Border::default().rounded(20),
-                        ..Default::default()
-                    })
-                )
-                .push(
-                    Row::new()
-                    .spacing(5)
-                    .align_y(Alignment::Center)
-                    .push(
-                        text("Тема додатку")
-                        .center()
-                    )
-                    .push(
-                        pick_list(
-                            Theme::ALL, 
-                            Some(&data.theme),
-                            Message::ThemeSelected
-                        )
-                    )
-                )
-                .push(
-                    button("Завантажити список мереж")
-                    .on_press(Message::ChooseNetworkFile)
-                )
             )
-            .width(Length::Fill)
-            .height(Length::Fill)
         )
+        .style(|theme: &iced::Theme| container::Style {
+            background: Some(theme.extended_palette().background.weaker.color.into()),
+            ..Default::default()
+        })
         .into()
+    }
+}
+
+fn container_style(theme: &iced::Theme) -> container::Style {
+    container::Style {
+        background: Some(theme.extended_palette().background.weakest.color.into()),
+        border: Border::default().rounded(20),
+        shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::new(0.0, 2.0), blur_radius: 4.0 },
+        ..Default::default()
     }
 }
