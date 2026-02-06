@@ -45,7 +45,7 @@ fn main() {
         App::subscription,
         App::view,
     )
-    .title("Modern Sender v0.5.0")
+    .title("Modern Sender v0.5.1")
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
     .font(include_bytes!("ui/icons/MaterialIcons-Regular.ttf"))
