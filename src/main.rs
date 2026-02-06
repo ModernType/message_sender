@@ -1,6 +1,6 @@
 #![feature(string_remove_matches)]
 
-use std::{fs::File, panic::PanicHookInfo, sync::Arc};
+use std::{fs::File, panic::PanicHookInfo};
 use tracing::level_filters::LevelFilter;
 
 use crate::ui::App;
@@ -36,7 +36,7 @@ fn main() {
     .pretty()
     .with_max_level(log_filter)
     .with_writer(log_file)
-    .with_writer(Arc::new(std::io::stdout()))
+    .with_writer(std::io::stdout)
     .init();
 
     iced::application::timed(

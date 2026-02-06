@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use iced::border::Radius;
-use iced::{Alignment, Border, Color, Font, Length, Padding, Pixels, Shadow, Vector};
+use iced::{Alignment, Border, Color, Length, Padding, Shadow, Vector};
 use iced::{Element, Task};
 use iced::widget::{Column, Row, button, checkbox, container, mouse_area, scrollable, space, text, text_input};
 
