@@ -154,7 +154,7 @@ impl MainScreen {
                                 }
                             }
                         }
-                        for(key, mode) in groups {
+                        for (key, mode) in groups.into_iter().filter(|(_, mode)| *mode != SendMode::Off) {
                             message.push(key.clone(), mode);
                         }
                     }
