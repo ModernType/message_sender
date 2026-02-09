@@ -107,7 +107,7 @@ pub async fn send_message(client: Arc<Client>, message: Arc<SendMessageInfo>, ma
                 }
             }
         };
-
+        
         group.set_id(message_id);
     }
 

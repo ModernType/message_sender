@@ -10,28 +10,16 @@ use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{Gro
 
 type Manager = presage::Manager<SqliteStore, Registered>;
 
-/// This macro wraps any future, attaches finish sending message, starts its execution and returns abort handle
-macro_rules! message_task {
-    ($e:expr, $finish_send:ident) => {
-        {
-            let handle = tokio::task::spawn_local(
-                $e.then(move |_| async move { $finish_send.send(SignalMessage::Finished).await.unwrap(); })
-            );
-            handle.abort_handle()
-        }
-    };
-}
-
 #[derive(Debug)]
 pub enum SignalMessage {
     LinkBegin,
     Linked(Result<Manager, anyhow::Error>),
     CancelLink,
-    Sync(Manager),
-    // GetGroups,
-    SendMessage(Manager, Arc<SendMessageInfo>, bool, bool),
-    DeleteMessage(Manager, Arc<SendMessageInfo>),
-    EditMessage(Manager, Arc<SendMessageInfo>, Vec<u64>, bool),
+    Disconnect,
+    GetGroups,
+    SendMessage(Arc<SendMessageInfo>, bool, bool),
+    DeleteMessage(Arc<SendMessageInfo>),
+    EditMessage(Arc<SendMessageInfo>, Vec<u64>, bool),
     Cancel,
     Finished,
 }
@@ -43,6 +31,8 @@ pub struct SignalWorker {
     abort_handle: Option<AbortHandle>,
     signal_sender: UnboundedSender<SignalMessage>,
     link_abort: Option<AbortHandle>,
+    manager: Option<Manager>,
+    has_connected: bool,
 }
 
 impl SignalWorker {
@@ -58,6 +48,8 @@ impl SignalWorker {
             message_queue: VecDeque::new(),
             abort_handle: None,
             link_abort: None,
+            manager: None,
+            has_connected: false,
         }
     }
 
@@ -84,13 +76,32 @@ impl SignalWorker {
             match m {
                 SignalMessage::LinkBegin => {
                     let mut finish_send = self.signal_sender.clone();
-                    let handle = tokio::task::spawn_local(link(ui_message_sender.clone()).then(move |res| async move { finish_send.send(SignalMessage::Linked(res)).await.unwrap(); }));
+                    let handle = tokio::task::spawn_local(link(ui_message_sender.clone()).then(move |res| async move {
+                        _ = finish_send.send(SignalMessage::Linked(res)).await;
+                    }));
                     self.link_abort = Some(handle.abort_handle());
                 },
                 SignalMessage::Linked(mng_res) => {
                     match mng_res {
-                        Ok(mng) => send_ui_message(ui_message_sender.clone(), ui::Message::SetManager(mng)),
-                        Err(_e) => send_ui_message(ui_message_sender.clone(), ui::side_menu::Message::SetSignalState(LinkState::Unlinked)),
+                        Ok(mng) => {
+                            tokio::task::spawn_local(sync(self.ui_message_sender.clone(), mng.clone()));
+                            self.manager = Some(mng);
+                            self.has_connected = true;
+                            self.execute_next_maybe();
+                            send_ui_message(ui_message_sender.clone(), ui::side_menu::Message::SetSignalState(LinkState::Linked))
+                        },
+                        Err(_e) => send_ui_message(ui_message_sender.clone(), if self.has_connected {
+                            ui::side_menu::Message::SetSignalState(LinkState::Disconnected)
+                        }
+                        else {
+                            ui::side_menu::Message::SetSignalState(LinkState::Unlinked)
+                        }),
+                    }
+                },
+                SignalMessage::Disconnect => {
+                    self.manager = None;
+                    if let Some(handle) = self.abort_handle.take() {
+                        handle.abort();
                     }
                 },
                 SignalMessage::CancelLink => {
@@ -99,33 +110,31 @@ impl SignalWorker {
                     }
                     send_ui_message(ui_message_sender.clone(), ui::side_menu::Message::SetSignalState(LinkState::Unlinked))
                 },
-                SignalMessage::Sync(mng) => {
-                    _ = tokio::task::spawn_local(sync(ui_message_sender.clone(), mng));
-                },
                 SignalMessage::Cancel => {
                     if let Some(handle) = self.abort_handle.take() {
                         handle.abort();
                     }
-                    if let Some(message) = self.message_queue.pop_front() {
-                        let handle = self.execute_task(message);
-                        self.abort_handle = Some(handle);
+                    if self.manager.is_some() {
+                        self.execute_next_maybe();
                     }
                 },
                 SignalMessage::Finished => {
                     self.abort_handle = None;
-                    if let Some(message) = self.message_queue.pop_front() {
-                        let handle = self.execute_task(message);
-                        self.abort_handle = Some(handle);
-                    }
+                    _ = self.message_queue.pop_front();
+                    self.execute_next_maybe();
                 },
+                SignalMessage::GetGroups => {
+                    if let Some(manager) = &self.manager {
+                        let manager = manager.clone();
+                        tokio::task::spawn_local(async move {
+                            let groups = get_groups(manager).await;
+                            _ = send_ui_message(ui_message_sender, groups.map(ui::main_screen::Message::SetGroups));
+                        });
+                    }
+                }
                 message => {
-                    if self.abort_handle.is_none() {
-                        let handle = self.execute_task(message);
-                        self.abort_handle = Some(handle);
-                    }
-                    else {
-                        self.message_queue.push_back(message);
-                    }
+                    self.message_queue.push_back(message);
+                    self.execute_next_maybe();
                 },
             };
 
@@ -133,13 +142,32 @@ impl SignalWorker {
         }
     }
 
-    fn execute_task(&self, message: SignalMessage) -> AbortHandle {
+    fn execute_next_maybe(&mut self) {
+        if self.abort_handle.is_none() && self.manager.is_some() && let Some(message) = self.message_queue.front() {
+            let handle = self.execute_task(message);
+            self.abort_handle = Some(handle);
+        }
+    }
+
+    fn execute_task(&self, message: &SignalMessage) -> AbortHandle {
+        /// This macro wraps any future, attaches finish sending message, starts its execution and returns abort handle
+        macro_rules! message_task {
+            ($e:expr, $finish_send:ident) => {
+                {
+                    let handle = tokio::task::spawn_local(
+                        $e.then(move |_| async move { $finish_send.send(SignalMessage::Finished).await.unwrap(); })
+                    );
+                    handle.abort_handle()
+                }
+            };
+        }
+
         let ui_message_sender = self.ui_message_sender.clone();
         let mut finish_send = self.signal_sender.clone();
         let abort_handle = match message {
-            SignalMessage::SendMessage(manager, message, markdown, parallel) => message_task!(send_message(ui_message_sender, manager, message, markdown, parallel), finish_send),
-            SignalMessage::DeleteMessage(manager, message) => message_task!(delete_message(ui_message_sender, manager, message), finish_send),
-            SignalMessage::EditMessage(manager, message, timestamps, markdown) => message_task!(edit_message(ui_message_sender, manager, message, timestamps, markdown), finish_send),
+            SignalMessage::SendMessage(message, markdown, parallel) => message_task!(send_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), *markdown, *parallel), finish_send),
+            SignalMessage::DeleteMessage(message) => message_task!(delete_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone()), finish_send),
+            SignalMessage::EditMessage(message, timestamps, markdown) => message_task!(edit_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), timestamps.clone(), *markdown), finish_send),
             _m => panic!("Other messages should not be here!")
         };
     
@@ -175,13 +203,15 @@ pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> 
 async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
     send_ui_message(msg_send_channel.clone(), ui::side_menu::Message::SetSignalState(LinkState::Linking));
     loop {
+        // Ping to google.com at start
         match TcpStream::connect("209.85.233.101:80") {
             Ok(_) => {
                 break;
             },
             Err(_) => {
+                send_ui_message(msg_send_channel.clone(), ui::side_menu::Message::SetSignalState(LinkState::Disconnected));
                 send_ui_message(msg_send_channel.clone(), ui::Message::Notification("Немає підключення до інтернету".to_owned()));
-                tokio::time::sleep(Duration::from_secs(3)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
     }
@@ -236,26 +266,23 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
 }
 
 async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut manager: Manager) -> anyhow::Result<()> {
-    loop {
-        let reciever = manager.receive_messages().await?;
-        let mut reciever = Box::pin(reciever);
-        while let Some(msg) = reciever.next().await {
-            match msg {
-                presage::model::messages::Received::Contacts => {
-                    info!("Got contacts");
-                }
-                presage::model::messages::Received::Content(_) => {
-                    info!("Got message");
-                }
-                presage::model::messages::Received::QueueEmpty => {
-                    _ = msg_send_channel.send(crate::ui::Message::Synced).await;
-                }
+    let reciever = manager.receive_messages().await?;
+    let mut reciever = Box::pin(reciever);
+    while let Some(msg) = reciever.next().await {
+        match msg {
+            presage::model::messages::Received::Contacts => {
+                info!("Got contacts");
+            }
+            presage::model::messages::Received::Content(_) => {
+                info!("Got message");
+            }
+            presage::model::messages::Received::QueueEmpty => {
+                _ = msg_send_channel.send(crate::ui::Message::Synced).await;
             }
         }
-        log::error!("Sync suspended");
-
-        tokio::time::sleep(Duration::from_millis(3000)).await;
     }
+    log::error!("Sync suspended");
+    _ = msg_send_channel.send(ui::Message::SignalDisconnected).await;
 
     #[allow(unreachable_code)]
     Ok(())

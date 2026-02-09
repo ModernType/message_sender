@@ -156,7 +156,11 @@ impl SideMenu {
                         button(
                             svg(svg::Handle::from_memory(SIGNAL_ICON))
                             .style(move |theme: &iced::Theme, _status| svg::Style {
-                                color: (self.signal_state != LinkState::Linked).then(|| theme.extended_palette().background.weaker.text),
+                                color: match self.signal_state {
+                                    LinkState::Linked => None,
+                                    LinkState::Disconnected => Some(Color { r: 0.8, ..Color::BLACK }),
+                                    _ => Some(theme.extended_palette().background.weaker.text),
+                                },
                             })
                             .height(30)
                             .width(Length::Shrink)
@@ -173,7 +177,11 @@ impl SideMenu {
                         button(
                             svg(svg::Handle::from_memory(WHATSAPP_ICON))
                             .style(move |theme: &iced::Theme, _status| svg::Style {
-                                color: (self.whatsapp_state != LinkState::Linked).then(|| theme.extended_palette().background.weaker.text),
+                                color: match self.whatsapp_state {
+                                    LinkState::Linked => None,
+                                    LinkState::Disconnected => Some(Color { r: 0.8, ..Color::BLACK }),
+                                    _ => Some(theme.extended_palette().background.weaker.text),
+                                },
                             })
                             .height(30)
                             .width(Length::Shrink)
@@ -316,7 +324,11 @@ impl SideMenu {
             menu_button(
                 svg(svg::Handle::from_memory(SIGNAL_ICON))
                     .style(move |theme: &iced::Theme, _status| svg::Style {
-                        color: (self.signal_state != LinkState::Linked).then(|| theme.extended_palette().background.weaker.text),
+                        color: match self.signal_state {
+                            LinkState::Linked => None,
+                            LinkState::Disconnected => Some(Color { r: 0.8, ..Color::BLACK }),
+                            _ => Some(theme.extended_palette().background.weaker.text),
+                        },
                     })
                     .content_fit(iced::ContentFit::Contain)
                     .height(30)
@@ -336,7 +348,11 @@ impl SideMenu {
             menu_button(
                 svg(svg::Handle::from_memory(WHATSAPP_ICON))
                     .style(move |theme: &iced::Theme, _status| svg::Style {
-                        color: (self.whatsapp_state != LinkState::Linked).then(|| theme.extended_palette().background.weaker.text),
+                        color: match self.whatsapp_state {
+                            LinkState::Linked => None,
+                            LinkState::Disconnected => Some(Color { r: 0.8, ..Color::BLACK }),
+                            _ => Some(theme.extended_palette().background.weaker.text),
+                        },
                     })
                     .width(30)
                     .height(30), 
@@ -503,7 +519,9 @@ pub enum LinkState {
     #[display("Підключення...")]
     Linking,
     #[display("Прив'язано")]
-    Linked
+    Linked,
+    #[display("Відключено")]
+    Disconnected,
 }
 
 

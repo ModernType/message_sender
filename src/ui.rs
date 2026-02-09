@@ -35,7 +35,7 @@ pub enum Message {
     CategoriesScrMessage(category_screen::Message),
     SideMenuMessage(side_menu::Message),
     SignalMessage(SignalMessage),
-    SetManager(Manager<SqliteStore, Registered>),
+    SignalDisconnected,
     SetWhatsappClient(Option<Arc<whatsapp_rust::Client>>),
     SetupSignalWorker(UnboundedSender<Message>),
     SendMessage(Arc<SendMessageInfo>),
@@ -79,7 +79,6 @@ impl From<SignalMessage> for Message {
 pub struct App {
     data: AppData,
     cur_screen: Screen,
-    manager: Option<Manager<SqliteStore, Registered>>,
     whatsapp_client: Option<Arc<whatsapp_rust::Client>>,
     main_scr: MainScreen,
     sett_scr: SettingsScreen,
@@ -119,7 +118,6 @@ impl App {
                 signal_logged: data.signal_logged,
                 whatsapp_logged: data.whatsapp_logged,
                 data,
-                manager: None,
                 whatsapp_client: None,
                 cur_screen: Screen::Main,
                 signal_task_send: None,
@@ -203,14 +201,6 @@ impl App {
 
                 Task::none()
             },
-            Message::SetManager(mng) => {
-                self.manager = Some(mng.clone());
-                self.signal_logged = true;
-                Task::batch([
-                    Task::done(side_menu::Message::SetSignalState(LinkState::Linked).into()),
-                    Task::done(SignalMessage::Sync(mng).into())   
-                ])
-            },
             Message::SetWhatsappClient(maybe_client) => {
                 match maybe_client {
                     Some(client) => {
@@ -238,11 +228,18 @@ impl App {
                     Task::perform(message_server::start_server(self.data.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
                 ])
             },
+            Message::SignalDisconnected => {
+                self.side_menu.signal_state = LinkState::Disconnected;
+                Task::batch([
+                    Task::done(SignalMessage::Disconnect.into()),
+                    Task::done(SignalMessage::LinkBegin.into())
+                ])
+            },
             Message::UpdateGroupList => {
                 let mut task_list = Vec::with_capacity(2);
-                if let Some(manager) = self.manager.as_ref() {
+                if self.side_menu.signal_state == LinkState::Linked {
                     task_list.push(
-                        Task::perform(crate::messangers::signal::get_groups(manager.clone()), |v| v.map(main_screen::Message::SetGroups).into())
+                        Task::done(SignalMessage::GetGroups.into())
                     );
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
@@ -254,9 +251,9 @@ impl App {
             },
             Message::SendMessage(message) => {
                 let mut task_list = Vec::with_capacity(2);
-                if let Some(manager) = self.manager.as_ref()  {
+                if self.side_menu.signal_state == LinkState::Linked || self.side_menu.signal_state == LinkState::Disconnected {
                     task_list.push(
-                        Task::done(SignalMessage::SendMessage(manager.clone(), message.clone(), self.data.markdown, self.data.parallel).into())
+                        Task::done(SignalMessage::SendMessage(message.clone(), self.data.markdown, self.data.parallel).into())
                     );
                 }
                 else if !message.groups_signal.is_empty() {
@@ -277,9 +274,9 @@ impl App {
             Message::DeleteMessage(message) => {
                 message.set_status(message_history::SendStatus::Pending, std::sync::atomic::Ordering::Relaxed);
                 let mut task_list = Vec::with_capacity(2);
-                if let Some(manager) = self.manager.as_ref()  {
+                if self.side_menu.signal_state == LinkState::Linked  {
                     task_list.push(
-                        Task::done(SignalMessage::DeleteMessage(manager.clone(), message.clone()).into())
+                        Task::done(SignalMessage::DeleteMessage(message.clone()).into())
                     );
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
@@ -291,9 +288,9 @@ impl App {
             },
             Message::EditMessage(message, timestamps, whatsapp_ids) => {
                 let mut task_list = Vec::with_capacity(2);
-                if let Some(manager) = self.manager.as_ref()  {
+                if self.side_menu.signal_state == LinkState::Linked  {
                     task_list.push(
-                        Task::done(SignalMessage::EditMessage(manager.clone(), message.clone(), timestamps, self.data.markdown).into())
+                        Task::done(SignalMessage::EditMessage(message.clone(), timestamps, self.data.markdown).into())
                     );
                 }
                 if let Some(client) = self.whatsapp_client.as_ref() {
