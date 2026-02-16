@@ -28,6 +28,7 @@ pub async fn start_whatsapp_task() {
 }
 
 async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<()>> {
+    _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Linking).into()).await;
     let store = Arc::new(SqliteStore::new("whatsapp_data.db").await?);
     
     let transport = TokioWebSocketTransportFactory::new();
@@ -43,15 +44,16 @@ async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<(
             // TODO: Maybe use timeout to communicate to UI
             #[allow(unused_variables)]
             Event::PairingQrCode { code, timeout } => {
-                UI_MESSAGE_SENDER.get().unwrap().send(ui::main_screen::Message::SetWhatsappUrl(Some(code)).into()).await.unwrap();
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::main_screen::Message::SetWhatsappUrl(Some(code)).into()).await;
             },
             Event::Connected(_) => {
                 println!("Connected to whatsapp");
-                UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::SetWhatsappClient(Some(client))).await.unwrap();
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::SetWhatsappClient(Some(client))).await;
             },
-            _other_event => {
-                
-            }
+            Event::Disconnected(_) => {
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Disconnected).into()).await;
+            },
+            _other_event => ()
         }
     })
     .build()

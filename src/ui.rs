@@ -253,7 +253,7 @@ impl App {
                 let mut task_list = Vec::with_capacity(2);
                 if self.side_menu.signal_state == LinkState::Linked || self.side_menu.signal_state == LinkState::Disconnected {
                     task_list.push(
-                        Task::done(SignalMessage::SendMessage(message.clone(), self.data.markdown, self.data.parallel).into())
+                        Task::done(SignalMessage::SendMessage(message.clone(), self.data.markdown).into())
                     );
                 }
                 else if !message.groups_signal.is_empty() {
@@ -459,7 +459,6 @@ pub struct AppData {
     pub sync_interval: u64,
     pub send_timeout: u64,
     pub markdown: bool,
-    pub parallel: bool,
     pub history_len: u32,
     pub signal_logged: bool,
     pub whatsapp_logged: bool,
@@ -480,7 +479,6 @@ impl Default for AppData {
             sync_interval: 10,
             send_timeout: 90,
             markdown: true,
-            parallel: false,
             history_len: 50,
             signal_logged: false,
             whatsapp_logged: false,

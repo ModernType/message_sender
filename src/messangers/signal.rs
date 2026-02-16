@@ -17,7 +17,7 @@ pub enum SignalMessage {
     CancelLink,
     Disconnect,
     GetGroups,
-    SendMessage(Arc<SendMessageInfo>, bool, bool),
+    SendMessage(Arc<SendMessageInfo>, bool),
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>, Vec<u64>, bool),
     Cancel,
@@ -165,7 +165,7 @@ impl SignalWorker {
         let ui_message_sender = self.ui_message_sender.clone();
         let mut finish_send = self.signal_sender.clone();
         let abort_handle = match message {
-            SignalMessage::SendMessage(message, markdown, parallel) => message_task!(send_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), *markdown, *parallel), finish_send),
+            SignalMessage::SendMessage(message, markdown) => message_task!(send_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), *markdown), finish_send),
             SignalMessage::DeleteMessage(message) => message_task!(delete_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone()), finish_send),
             SignalMessage::EditMessage(message, timestamps, markdown) => message_task!(edit_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), timestamps.clone(), *markdown), finish_send),
             _m => panic!("Other messages should not be here!")
@@ -293,59 +293,30 @@ async fn send_message(
     manager: Manager,
     message: Arc<SendMessageInfo>,
     markdown: bool,
-    parallel: bool,
 ) {
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-    if !parallel {
-        for group in message.groups_signal.iter() {
-            loop {
-                match send_message_inner(
-                    manager.clone(),
-                    group,
-                    &message.content,
-                    message.freq.as_deref(),
-                    markdown,
-                ).await {
-                    Ok(_) => {
-                        message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-                        send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-                        break;
-                    }
-                    Err(_e) => {
-                        message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
-                        // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
-                        tokio::time::sleep(Duration::from_millis(2000)).await;
-                    }
+    for group in message.groups_signal.iter() {
+        loop {
+            match send_message_inner(
+                manager.clone(),
+                group,
+                &message.content,
+                message.freq.as_deref(),
+                markdown,
+            ).await {
+                Ok(_) => {
+                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+                    break;
+                }
+                Err(_e) => {
+                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                    // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
+                    tokio::time::sleep(Duration::from_millis(2000)).await;
                 }
             }
         }
-    }
-    else {
-        futures::future::join_all(
-            message.groups_signal.iter()
-            .map(|group| async {
-                loop {
-                    match send_message_inner(
-                        manager.clone(),
-                        group,
-                        &message.content,
-                        message.freq.as_deref(),
-                        markdown,
-                    ).await {
-                        Ok(_) => {
-                            message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-                            send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-                            break;
-                        }
-                        Err(e) => {
-                            message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
-                            send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
-                        }
-                    }
-                }
-            })
-        ).await;
     }
     message.set_status(SendStatus::Sent, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
