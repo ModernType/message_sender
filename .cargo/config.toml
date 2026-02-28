@@ -2,6 +2,11 @@
 h = "hot --features hot"
 release = "build -r"
 rr = "run -r"
+release-win = "build --release --target x86_64-pc-windows-gnu"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+runner = "wine"
 
 [build]
 rustflags = ["-Clink-arg=-fuse-ld=lld", "-Zthreads=12"]

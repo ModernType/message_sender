@@ -1,4 +1,5 @@
 #![feature(string_remove_matches)]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{fs::File, panic::PanicHookInfo};
 use tracing::level_filters::LevelFilter;
@@ -45,7 +46,7 @@ fn main() {
         App::subscription,
         App::view,
     )
-    .title("Modern Sender v0.5.2-dev")
+    .title("Modern Sender v1.0-rc1")
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
     .font(include_bytes!("ui/icons/MaterialIcons-Regular.ttf"))
