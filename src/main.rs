@@ -24,21 +24,26 @@ fn panic_message_box(info: &PanicHookInfo) {
 }
 
 fn main() {
-    let log_file = File::create("sender.log").unwrap();
-    #[cfg(debug_assertions)]
-    let log_filter = LevelFilter::INFO;
-    #[cfg(not(debug_assertions))]
-    let log_filter = LevelFilter::WARN;
-
     std::panic::set_hook(Box::new(panic_message_box));
 
+    #[cfg(debug_assertions)]
+    {
+        tracing_subscriber::FmtSubscriber::builder()
+        .pretty()
+        .with_max_level(LevelFilter::INFO)
+        .with_writer(std::io::stdout)
+        .init();
+    }
 
-    tracing_subscriber::FmtSubscriber::builder()
-    .pretty()
-    .with_max_level(log_filter)
-    .with_writer(log_file)
-    .with_writer(std::io::stdout)
-    .init();
+    #[cfg(not(debug_assertions))]
+    {
+        let log_file = File::create("sender.log").unwrap();
+        tracing_subscriber::FmtSubscriber::builder()
+        .pretty()
+        .with_max_level(LevelFilter::WARN)
+        .with_writer(log_file)
+        .init();
+    }
 
     iced::application::timed(
         App::new,
