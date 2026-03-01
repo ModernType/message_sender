@@ -1,10 +1,11 @@
 use std::{collections::VecDeque, net::TcpStream, sync::Arc, time::{Duration, SystemTime}};
 
-use futures::{FutureExt, SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}};
-use log::{info, warn};
+use futures::{FutureExt, SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}, pin_mut};
+use log::info;
 use presage::{libsignal_service::configuration::SignalServers, manager::Registered, proto::{DataMessage, EditMessage, GroupContextV2, data_message::Delete}, store::ContentsStore};
 use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, SqliteStoreError};
 use tokio::task::{AbortHandle, LocalSet};
+use tracing::{error, warn};
 
 use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}, side_menu::LinkState}};
 
@@ -175,6 +176,16 @@ impl SignalWorker {
     }
 }
 
+pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> {
+    Ok(
+        manager.store().groups().await?
+        .flatten()
+        .map(|(key, group)| {
+            (Key::from(key), group.title)
+        })
+        .collect()
+    )
+}
 
 async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     let store = SqliteStore::open_with_options(
@@ -187,17 +198,6 @@ async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     // Clearing all messages to free space
     // _ = store.clear_messages().await;
     Ok(store)
-}
-
-pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> {
-    Ok(
-        manager.store().groups().await?
-        .flatten()
-        .map(|(key, group)| {
-            (Key::from(key), group.title)
-        })
-        .collect()
-    )
 }
 
 async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
@@ -233,7 +233,7 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
                     match presage::Manager::link_secondary_device(
                         store,
                         SignalServers::Production,
-                        "message-sender".to_owned(),
+                        "sender".to_owned(),
                         tx,
                     )
                     .await
@@ -267,7 +267,7 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
 
 async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut manager: Manager) -> anyhow::Result<()> {
     let reciever = manager.receive_messages().await?;
-    let mut reciever = Box::pin(reciever);
+    pin_mut!(reciever);
     while let Some(msg) = reciever.next().await {
         match msg {
             presage::model::messages::Received::Contacts => {
