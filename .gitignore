@@ -1,6 +1,6 @@
 /target
 data.ron
 sender.log
-signal_data.db
+signal_data*
 whatsapp_data*
 test*.json

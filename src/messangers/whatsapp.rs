@@ -1,10 +1,7 @@
 use std::sync::{Arc, OnceLock};
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use whatsapp_rust::{Client, bot::Bot, types::events::Event};
-use whatsapp_rust_sqlite_storage::SqliteStore;
-use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
-use whatsapp_rust_ureq_http_client::UreqHttpClient;
+use whatsapp_rust::{Client, bot::Bot, store::SqliteStore, transport::{TokioWebSocketTransportFactory, UreqHttpClient}, types::events::Event};
 use waproto::whatsapp as wa;
 
 use crate::{message::{SendMode, parse_message_with_whatsapp_format}, messangers::Key, ui::{self, side_menu::LinkState, message_history::{SendMessageInfo, SendStatus}}};
