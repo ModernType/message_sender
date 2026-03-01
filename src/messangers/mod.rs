@@ -19,8 +19,8 @@ impl PartialOrd for Key {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         fn val(v: &Key) -> usize {
             match v {
-                Key::Signal(_) => 1,
-                Key::Whatsapp(_) => 0,
+                Key::Signal(_) => 0,
+                Key::Whatsapp(_) => 1,
             }
         }
 

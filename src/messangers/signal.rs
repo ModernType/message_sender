@@ -202,19 +202,19 @@ pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> 
 
 async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyhow::Result<Manager> {
     send_ui_message(msg_send_channel.clone(), ui::side_menu::Message::SetSignalState(LinkState::Linking));
-    // loop {
-    //     // Ping to google.com at start
-    //     match TcpStream::connect("209.85.233.101:80") {
-    //         Ok(_) => {
-    //             break;
-    //         },
-    //         Err(_) => {
-    //             send_ui_message(msg_send_channel.clone(), ui::side_menu::Message::SetSignalState(LinkState::Disconnected));
-    //             send_ui_message(msg_send_channel.clone(), ui::Message::Notification("Немає підключення до інтернету".to_owned()));
-    //             tokio::time::sleep(Duration::from_secs(5)).await;
-    //         }
-    //     }
-    // }
+    loop {
+        // Ping to google.com at start
+        match TcpStream::connect("209.85.233.101:80") {
+            Ok(_) => {
+                break;
+            },
+            Err(_) => {
+                send_ui_message(msg_send_channel.clone(), ui::side_menu::Message::SetSignalState(LinkState::Disconnected));
+                send_ui_message(msg_send_channel.clone(), ui::Message::Notification("Немає підключення до інтернету".to_owned()));
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }
+    }
 
     let store = get_store().await?;
     info!("Registering from store");

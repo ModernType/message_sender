@@ -3,8 +3,6 @@ use std::{
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, container, text}};
-use presage::{Manager, manager::Registered};
-use presage_store_sqlite::SqliteStore;
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, side_menu::{LinkState, SideMenu}, theme::Theme}};

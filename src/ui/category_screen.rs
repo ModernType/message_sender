@@ -230,9 +230,9 @@ impl CategoryScreen {
 
     fn general_groups<'a>(&'a self, groups: &'a HashMap<Key, Group>) -> Element<'a, Message> {
         fn sort((k1, g1): &(&Key, &Group), (k2, g2): &(&Key, &Group)) -> std::cmp::Ordering {
-            let v = g1.title.cmp(&g2.title);
+            let v = k1.cmp(k2);
             if v == std::cmp::Ordering::Equal {
-                k1.cmp(k2)
+                g1.title.cmp(&g2.title)
             }
             else {
                 v
@@ -383,9 +383,9 @@ impl CategoryScreen {
 
     fn category_groups<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
         fn sort((k1, g1): &(&Key, &Group), (k2, g2): &(&Key, &Group)) -> std::cmp::Ordering {
-            let v = g1.title.cmp(&g2.title);
+            let v = k1.cmp(k2);
             if v == std::cmp::Ordering::Equal {
-                k1.cmp(k2)
+                g1.title.cmp(&g2.title)
             }
             else {
                 v
@@ -551,7 +551,7 @@ impl CategoryScreen {
         }
 
         let category = &data.categories[index];
-        for (id, network) in data.networks.iter() {
+        for (id, network) in data.networks.iter().filter(|(_, net)| net.name.contains(&self.network_search)) {
             if category.networks.contains(id) {
                 active.push((id, network))
             }
