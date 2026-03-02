@@ -42,6 +42,7 @@ fn main() {
         .pretty()
         .with_max_level(LevelFilter::WARN)
         .with_writer(log_file)
+        .with_ansi(false)
         .init();
     }
 
