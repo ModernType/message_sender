@@ -365,13 +365,13 @@ async fn send_message_inner(
     });
     message.timestamp = Some(timestamp);
 
+    group.set_timestamp(timestamp, std::sync::atomic::Ordering::Relaxed);
+
     manager.send_message_to_group(
         &group.key,
         message,
         timestamp
     ).await?;
-
-    group.set_timestamp(timestamp, std::sync::atomic::Ordering::Relaxed);
 
     Ok(())
 }
@@ -416,6 +416,7 @@ async fn delete_message(
             }
             Err(e) => {
                 message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                group.set_timestamp(0, std::sync::atomic::Ordering::Relaxed);
                 error!("Error deleting from group: {e}");
                 send_ui_message(msg_send_channel.clone(), notification!("Помилка видалення повідомлення: {}", e));
             }
@@ -486,7 +487,6 @@ async fn edit_message(
             Ok(_) => {
                 message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
                 send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-                break;
             }
             Err(e) => {
                 message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
