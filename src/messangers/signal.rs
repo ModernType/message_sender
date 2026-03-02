@@ -7,7 +7,7 @@ use presage_store_sqlite::{OnNewIdentity, SqliteConnectOptions, SqliteStore, Sql
 use tokio::task::{AbortHandle, LocalSet};
 use tracing::{error, warn};
 
-use crate::{message::SendMode, messangers::Key, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}, side_menu::LinkState}};
+use crate::{message::SendMode, messangers::Key, notification, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}, side_menu::LinkState}};
 
 type Manager = presage::Manager<SqliteStore, Registered>;
 
@@ -297,24 +297,21 @@ async fn send_message(
     message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
     send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
     for group in message.groups_signal.iter() {
-        loop {
-            match send_message_inner(
-                manager.clone(),
-                group,
-                &message.content,
-                message.freq.as_deref(),
-                markdown,
-            ).await {
-                Ok(_) => {
-                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-                    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-                    break;
-                }
-                Err(_e) => {
-                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
-                    // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
-                    tokio::time::sleep(Duration::from_millis(2000)).await;
-                }
+        match send_message_inner(
+            manager.clone(),
+            group,
+            &message.content,
+            message.freq.as_deref(),
+            markdown,
+        ).await {
+            Ok(_) => {
+                message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+            }
+            Err(e) => {
+                message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                error!("Error sending to group: {e}");
+                send_ui_message(msg_send_channel.clone(), notification!("Помилка відправки у групу: {}", e));
             }
         }
     }
@@ -407,23 +404,20 @@ async fn delete_message(
             ..Default::default()
         };
 
-        loop {
-            match manager.send_message_to_group(
-                &group.key,
-                delete_message.clone(),
-                cur_timestamp
-            ).await {
-                Ok(_) => {
-                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-                    group.set_timestamp(0, std::sync::atomic::Ordering::Relaxed);
-                    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-                    break;
-                }
-                Err(_e) => {
-                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
-                    // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
-                    tokio::time::sleep(Duration::from_millis(2000)).await;
-                }
+        match manager.send_message_to_group(
+            &group.key,
+            delete_message.clone(),
+            cur_timestamp
+        ).await {
+            Ok(_) => {
+                message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                group.set_timestamp(0, std::sync::atomic::Ordering::Relaxed);
+                send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+            }
+            Err(e) => {
+                message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                error!("Error deleting from group: {e}");
+                send_ui_message(msg_send_channel.clone(), notification!("Помилка видалення повідомлення: {}", e));
             }
         }
     }
@@ -484,22 +478,20 @@ async fn edit_message(
             data_message: Some(data_message)
         };
         
-        loop {
-            match manager.send_message_to_group(
-                &group.key,
-                edit_message.clone(),
-                now
-            ).await {
-                Ok(_) => {
-                    message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
-                    send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
-                    break;
-                }
-                Err(_e) => {
-                    message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
-                    // send_ui_message(msg_send_channel.clone(), ui::Message::Notification(e.to_string()));
-                    tokio::time::sleep(Duration::from_millis(2000)).await;
-                }
+        match manager.send_message_to_group(
+            &group.key,
+            edit_message.clone(),
+            now
+        ).await {
+            Ok(_) => {
+                message.set_status(SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
+                send_ui_message(msg_send_channel.clone(), ui::main_screen::Message::UpdateMessageHistory);
+                break;
+            }
+            Err(e) => {
+                message.set_status(SendStatus::Failed, std::sync::atomic::Ordering::Relaxed);
+                error!("Error editing: {e}");
+                send_ui_message(msg_send_channel.clone(), notification!("Помилка редагування повідомлення: {}", e));
             }
         }
 
