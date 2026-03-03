@@ -49,6 +49,7 @@ pub enum Message {
     NotificationClose,
     RecivedNetworks(HashMap<u64, NetworkInfo>),
     Keyboard(keyboard::Event),
+    StartServer,
     None,
 }
 
@@ -87,6 +88,8 @@ pub struct App {
     signal_logged: bool,
     whatsapp_logged: bool,
     side_menu: SideMenu,
+    server_abort: Option<iced::task::Handle>,
+    ui_message_channel: Option<UnboundedSender<Message>>,
 }
 
 impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
@@ -122,6 +125,8 @@ impl App {
                 now: Instant::now(),
                 notification: Notification::new(),
                 side_menu: SideMenu::new(),
+                server_abort: None,
+                ui_message_channel: None,
             },
             start_task
         )
@@ -213,17 +218,26 @@ impl App {
             },
             Message::Synced => {
                 Task::done(Message::UpdateGroupList)
-            }
+            },
+            Message::StartServer => {
+                let (task, handle) = Task::abortable(
+                    Task::future(message_server::start_server(self.data.recieve_address, self.ui_message_channel.clone().unwrap())).discard()
+                );
+                let handle = handle.abort_on_drop();
+                self.server_abort = Some(handle);
+                task
+            },
             Message::SetupSignalWorker(tx) => {
                 let (task_tx, task_rx) = futures::channel::mpsc::unbounded();
                 SignalWorker::spawn_new(task_rx, tx.clone(), task_tx.clone());
                 self.signal_task_send = Some(task_tx);
                 whatsapp::UI_MESSAGE_SENDER.set(tx.clone()).unwrap();
+                self.ui_message_channel = Some(tx);
 
                 Task::batch([
                     if self.signal_logged { Task::done(SignalMessage::LinkBegin.into()) } else { Task::none() },
                     if self.whatsapp_logged { Task::future(whatsapp::start_whatsapp_task()).discard() } else { Task::none() },
-                    Task::perform(message_server::start_server(self.data.recieve_address, tx), |_| Message::Notification("Message server stopped working".to_owned()))
+                    Task::done(Message::StartServer)
                 ])
             },
             Message::SignalDisconnected => {

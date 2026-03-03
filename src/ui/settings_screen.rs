@@ -1,4 +1,4 @@
-use iced::{Alignment, Border, Color, Element, Font, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
+use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
 use rfd::FileHandle;
 
 use crate::{send_categories::parse_networks_data, ui::{AppData, theme::Theme}};
@@ -16,6 +16,7 @@ pub enum Message {
     ThemeSelected(Theme),
     ChooseNetworkFile,
     NetworkFileChoosen(Option<FileHandle>),
+    RestartServer,
 }
 
 impl From<Message> for MainMessage {
@@ -99,7 +100,9 @@ impl SettingsScreen {
                     })
                 }
             },
-            
+            Message::RestartServer => {
+                return Task::done(MainMessage::StartServer);
+            }
         }
 
         Task::none()
@@ -136,21 +139,27 @@ impl SettingsScreen {
                                     text("Адреса серверу для прийому повідомлень")
                                 )
                                 .push(
-                                    text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
-                                    .style(|theme: &iced::Theme, status| {
-                                        let mut default = text_input::Style {
-                                            border: Border::default().rounded(10).color(theme.extended_palette().secondary.weak.color).width(1),
-                                            ..text_input::default(theme, status)
-                                        };
-                                        if !self.address_correct {
-                                            default.border.color = theme.palette().danger;
-                                        }
-                                        default
-                                    })
-                                    .on_input(Message::RecieveAddressEditChanged)
-                                )
-                                .push(
-                                    text("Програму потрібно перезапустити, щоб зміни вступили у силу").font(Font { style:iced::font::Style::Italic, ..Default::default() })
+                                    Row::new()
+                                    .spacing(5)
+                                    .push(
+                                        text_input("Адреса серверу для прийому повідомлень", &self.recieve_address_edit)
+                                        .style(|theme: &iced::Theme, status| {
+                                            let mut default = text_input::Style {
+                                                border: Border::default().rounded(10).color(theme.extended_palette().secondary.weak.color).width(1),
+                                                ..text_input::default(theme, status)
+                                            };
+                                            if !self.address_correct {
+                                                default.border.color = theme.palette().danger;
+                                            }
+                                            default
+                                        })
+                                        .on_input(Message::RecieveAddressEditChanged)
+                                    )
+                                    .push(
+                                        button("Застосувати")
+                                        .on_press_maybe(self.address_correct.then_some(Message::RestartServer))
+                                        .style(button_primary)
+                                    )
                                 )
                             )
                             .push(
@@ -229,14 +238,7 @@ impl SettingsScreen {
                     .push(
                         button("Завантажити список мереж")
                         .on_press(Message::ChooseNetworkFile)
-                        .style(|theme: &iced::Theme, status| {
-                            let border = Border::default().rounded(10);
-                            button::Style {
-                                border,
-                                shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
-                                ..button::primary(theme, status)
-                            }
-                        })
+                        .style(button_primary)
                     )
                 )
                 .width(Length::Fill)
@@ -257,5 +259,23 @@ fn container_style(theme: &iced::Theme) -> container::Style {
         border: Border::default().rounded(20),
         shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::new(0.0, 2.0), blur_radius: 4.0 },
         ..Default::default()
+    }
+}
+
+fn button_primary(theme: &iced::Theme, status: button::Status) -> button::Style {
+    let border = Border::default().rounded(10);
+    button::Style {
+        border,
+        shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
+        ..button::primary(theme, status)
+    }
+}
+
+fn button_secondary(theme: &iced::Theme, status: button::Status) -> button::Style {
+    let border = Border::default().rounded(10);
+    button::Style {
+        border,
+        shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
+        ..button::secondary(theme, status)
     }
 }
