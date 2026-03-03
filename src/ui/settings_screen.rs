@@ -1,7 +1,8 @@
 use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
 use rfd::FileHandle;
+use tracing::error;
 
-use crate::{send_categories::parse_networks_data, ui::{AppData, theme::Theme}};
+use crate::{notification, send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -17,6 +18,11 @@ pub enum Message {
     ChooseNetworkFile,
     NetworkFileChoosen(Option<FileHandle>),
     RestartServer,
+    ChooseImport,
+    Import(Option<FileHandle>),
+    ChooseExport,
+    Export(Option<FileHandle>),
+    UpdateData(AppData),
 }
 
 impl From<Message> for MainMessage {
@@ -102,7 +108,59 @@ impl SettingsScreen {
             },
             Message::RestartServer => {
                 return Task::done(MainMessage::StartServer);
-            }
+            },
+            Message::ChooseExport => {
+                let mut dialog = rfd::AsyncFileDialog::new()
+                .set_title("Зберегти налаштування")
+                .set_file_name("sender_settings");
+                if let Some(home) = std::env::home_dir() {
+                    dialog = dialog.set_directory(home);
+                }
+                return Task::perform(dialog.save_file(), |p| Message::Export(p).into());
+            },
+            Message::ChooseImport => {
+                let mut dialog = rfd::AsyncFileDialog::new()
+                .set_title("Завантажити налаштування")
+                .set_file_name("sender_settings");
+                if let Some(home) = std::env::home_dir() {
+                    dialog = dialog.set_directory(home);
+                }
+                return Task::perform(dialog.pick_file(), |p| Message::Import(p).into());
+            },
+            Message::Export(path) => {
+                if let Some(path) = path {
+                    let data = data.clone();
+                    return Task::future(async move {
+                        let path = path;
+                        return match data.save_to(path.path()).await {
+                            Ok(_) => notification!("Налаштування збережено до: {}", path.path().to_string_lossy()),
+                            Err(e) => {
+                                error!("Error saving settings: {}", &e);
+                                notification!("Помилка збереження налаштувань: {}", e)
+                            }
+                        };
+                    })
+                }
+            },
+            Message::Import(path) => {
+                if let Some(path) = path {
+                    return Task::future(async move {
+                        match AppData::load_from(path.path()).await {
+                            Ok(data) => {
+                                Message::UpdateData(data).into()
+                            },
+                            Err(e) => {
+                                error!("Error loading settings: {}", &e);
+                                notification!("Помилка завантаження налаштувань: {}", e)
+                            },
+                        }
+                    })
+                }
+            },
+            Message::UpdateData(new_data) => {
+                *data = new_data;
+                return Task::done(notification!("Налаштування завантажено!"));
+            },
         }
 
         Task::none()
@@ -236,9 +294,34 @@ impl SettingsScreen {
                         .style(container_style)
                     )
                     .push(
-                        button("Завантажити список мереж")
-                        .on_press(Message::ChooseNetworkFile)
-                        .style(button_primary)
+                        Row::new()
+                        .spacing(10)
+                        .push(
+                            button("Завантажити налаштування")
+                            .on_press(Message::ChooseImport)
+                            .style(button_secondary)
+                            .padding(10)
+                        )
+                        .push(
+                            button("Зберегти налаштування")
+                            .on_press(Message::ChooseExport)
+                            .style(button_primary)
+                            .padding(10)
+                        )
+                    )
+                    .push_maybe(
+                        {
+                            #[cfg(debug_assertions)]
+                            let debug = true;
+                            #[cfg(not(debug_assertions))]
+                            let debug = false;
+
+                            debug.then(
+                                || button("Завантажити список мереж")
+                                .on_press(Message::ChooseNetworkFile)
+                                .style(button_primary)
+                            )
+                        }
                     )
                 )
                 .width(Length::Fill)

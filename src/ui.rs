@@ -1,10 +1,11 @@
 use std::{
-    collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, sync::Arc, time::{Duration, Instant}
+    collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, path::Path, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, container, text}};
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, side_menu::{LinkState, SideMenu}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
@@ -462,7 +463,7 @@ impl App {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct AppData {
     pub groups: HashMap<Key, main_screen::Group>,
@@ -509,6 +510,29 @@ impl AppData {
         let data = File::open("data.ron")?;
         let state = ron::de::from_reader(data)?;
         Ok(state)
+    }
+
+    pub async fn load_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let mut file = tokio::fs::File::open(path).await?;
+        let mut content = String::new();
+        file.read_to_string(&mut content).await?;
+        Ok(ron::de::from_str(&content)?)
+    }
+
+    pub async fn save_to(&self, path: impl AsRef<Path>) -> std::io::Result<()> {
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)
+            .await?;
+        let s = ron::ser::to_string_pretty(
+            self,
+            PrettyConfig::default(),
+        ).unwrap();
+
+        file.write_all(s.as_bytes()).await?;
+        Ok(())
     }
 
     pub fn new() -> Self {
