@@ -1,6 +1,6 @@
 use std::time::Instant;
 use derive_more::Display;
-use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, widget::{Column, Row, Stack, button, container, opaque, space, svg, text, tooltip}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, opaque, space, svg, text, tooltip}};
 
 use crate::{icon, message::OperatorMessage, message_server::AcceptedMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{GROUP_REFRESH_ICON, SIGNAL_ICON, WHATSAPP_ICON}}};
 
@@ -211,15 +211,10 @@ impl SideMenu {
                     ))
                 )
                 .push(
-                    container(
-                        space()
-                        .width(Length::Fill)
-                        .height(3)
-                    )
-                    .style(|theme: &iced::Theme| container::Style {
-                        background: Some(theme.extended_palette().background.neutral.color.into()),
-                        border: Border::default().rounded(1.5),
-                        ..Default::default()
+                    iced::widget::rule::horizontal(3)
+                    .style(|theme: &iced::Theme| iced::widget::rule::Style { 
+                        radius: Radius::new(1.5),
+                        ..iced::widget::rule::default(theme)
                     })
                 )
                 .push(
@@ -247,15 +242,10 @@ impl SideMenu {
                     )
                 )
                 .push_maybe(
-                    data.message_file.then(|| container(
-                        space()
-                        .width(Length::Fill)
-                        .height(3)
-                    )
-                    .style(|theme: &iced::Theme| container::Style {
-                        background: Some(theme.extended_palette().background.neutral.color.into()),
-                        border: Border::default().rounded(1.5),
-                        ..Default::default()
+                    data.message_file.then(|| iced::widget::rule::horizontal(3)
+                    .style(|theme: &iced::Theme| iced::widget::rule::Style { 
+                        radius: Radius::new(1.5),
+                        ..iced::widget::rule::default(theme)
                     }))
                 )
                 .push_maybe(
@@ -338,8 +328,7 @@ impl SideMenu {
                         color: (self.signal_state == LinkState::Linked).then_some(Color::from_rgb(0.0, 0.0, 0.7)),
                     })
                     .height(Length::Fill)
-                    .align_y(Alignment::Center)
-                    .size(self.open.interpolate(0.1, 16.0, self.now)),
+                    .align_y(Alignment::Center),
                 (self.signal_state == LinkState::Unlinked).then_some(Message::LinkSignal),
                 false
             )
@@ -361,8 +350,7 @@ impl SideMenu {
                         color: (self.whatsapp_state == LinkState::Linked).then_some(Color::from_rgb(0.0, 0.7, 0.0)),
                     })
                     .height(Length::Fill)
-                    .align_y(Alignment::Center)
-                    .size(self.open.interpolate(0.1, 16.0, self.now)), 
+                    .align_y(Alignment::Center), 
                 (self.whatsapp_state == LinkState::Unlinked).then_some(Message::LinkWhatsapp),
                 false
             )
@@ -377,22 +365,17 @@ impl SideMenu {
                     .height(30), 
                 text("Оновити групи")
                     .height(Length::Fill)
-                    .align_y(Alignment::Center)
-                    .size(self.open.interpolate(0.1, 16.0, self.now)), 
+                    .align_y(Alignment::Center), 
                 Some(Message::UpdateGroups),
                 false
             ))
         )
         .push(
-            container(
-                space()
-                .width(Length::Fill)
-                .height(3)
-            )
-            .style(|theme: &iced::Theme| container::Style {
-                background: Some(theme.extended_palette().background.neutral.color.into()),
-                border: Border::default().rounded(1.5),
-                ..Default::default()
+            iced::widget::rule::horizontal(3)
+            .style(|theme: &iced::Theme| iced::widget::rule::Style { 
+                radius: Radius::new(1.5),
+                fill_mode: iced::widget::rule::FillMode::Padded(10),
+                ..iced::widget::rule::default(theme)
             })
         )
         .push(
@@ -401,8 +384,7 @@ impl SideMenu {
                 .size(28), 
                 text("Повідомлення")
                 .height(Length::Fill)
-                .align_y(Alignment::Center)
-                .size(self.open.interpolate(0.1, 16.0, self.now)), 
+                .align_y(Alignment::Center), 
                 Some(Message::Main),
                 selected_screen == Screen::Main
             )
@@ -414,26 +396,18 @@ impl SideMenu {
                     .align_y(Alignment::Center),
                 text("Канали надсилання")
                 .height(Length::Fill)
-                .align_y(Alignment::Center)
-                .size(self.open.interpolate(0.1, 16.0, self.now)),
+                .align_y(Alignment::Center),
                 Some(Message::Categories),
                 selected_screen == Screen::Categories
             )
         )
         .push_maybe(
-            data.message_file.then(|| container(
-                space()
-                .width(Length::Fill)
-                .height(3)
-            )
-            .style(|theme: &iced::Theme| container::Style {
-                background: Some(theme.extended_palette().background.neutral.color.into()),
-                border: Border::default().rounded(1.5),
-                ..Default::default()
-            })
-            // .padding(Padding::default().horizontal(horizontal))
-        )
-            
+            data.message_file.then(|| iced::widget::rule::horizontal(3)
+            .style(|theme: &iced::Theme| iced::widget::rule::Style { 
+                radius: Radius::new(1.5),
+                fill_mode: iced::widget::rule::FillMode::Padded(10),
+                ..iced::widget::rule::default(theme)
+            }))
         )
         .push_maybe(
             data.message_file.then(|| menu_button(
@@ -442,8 +416,7 @@ impl SideMenu {
                     .align_y(Alignment::Center),
                 text("Відправити з файлу")
                 .height(Length::Fill)
-                .align_y(Alignment::Center)
-                .size(self.open.interpolate(0.1, 16.0, self.now)),
+                .align_y(Alignment::Center),
                 Some(Message::MessageFile),
                 false
             ))
@@ -458,8 +431,7 @@ impl SideMenu {
                     .size(28),
                 text("Налаштування")
                     .height(Length::Fill)
-                    .align_y(Alignment::Center)
-                    .size(self.open.interpolate(0.1, 16.0, self.now)),
+                    .align_y(Alignment::Center),
                 Some(Message::Settings),
                 selected_screen == Screen::Settings
             )
@@ -487,6 +459,7 @@ impl SideMenu {
                 container(
                     self.menu_content(selected_screen, data)
                 )
+                .clip(true)
                 .width(
                     if self.open.is_animating(self.now) || self.open.value() {
                         self.open.interpolate(60.0, 200.0, self.now)
