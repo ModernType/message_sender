@@ -1,6 +1,6 @@
 use std::time::Instant;
 use derive_more::Display;
-use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, opaque, space, svg, text, tooltip}};
+use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, mouse_area, opaque, space, svg, text, tooltip}};
 
 use crate::{icon, message::OperatorMessage, message_server::AcceptedMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{GROUP_REFRESH_ICON, SIGNAL_ICON, WHATSAPP_ICON}}};
 
@@ -453,6 +453,12 @@ impl SideMenu {
                 background: Some(Color { a: self.open.interpolate(0.0, 0.4, self.now), ..Color::BLACK }.into()),
                 ..Default::default()
             })
+        )
+        .push_maybe(
+            self.open.value().then(
+                || mouse_area(space().height(Length::Fill).width(Length::Fill))
+                .on_release(Message::ToggleSideMenu)
+            )
         )
         .push(
             opaque(
