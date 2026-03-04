@@ -212,8 +212,9 @@ impl App {
                         self.whatsapp_logged = true;
                         Task::done(side_menu::Message::SetWhatsappState(LinkState::Linked).into())
                     },
-                    _ => {
-                        Task::none()
+                    None => {
+                        self.whatsapp_client = None;
+                        Task::done(side_menu::Message::SetWhatsappState(LinkState::Unlinked).into())
                     }
                 }
             },

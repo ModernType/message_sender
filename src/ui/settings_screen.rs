@@ -1,8 +1,8 @@
-use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, text, text_input}};
-use rfd::FileHandle;
-use tracing::error;
+use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, svg, text, text_input}};
+use rfd::{FileHandle, MessageDialogResult};
+use tracing::{error, warn};
 
-use crate::{notification, send_categories::parse_networks_data, ui::{AppData, ext::PushMaybe, theme::Theme}};
+use crate::{icon, messangers::signal::SignalMessage, notification, send_categories::parse_networks_data, ui::{self, AppData, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -23,6 +23,9 @@ pub enum Message {
     ChooseExport,
     Export(Option<FileHandle>),
     UpdateData(AppData),
+    ShowAlert(String, Box<Message>),
+    ClearSignal,
+    ClearWhatsapp,
 }
 
 impl From<Message> for MainMessage {
@@ -161,6 +164,52 @@ impl SettingsScreen {
                 *data = new_data;
                 return Task::done(notification!("Налаштування завантажено!"));
             },
+            Message::ShowAlert(alert, message) => {
+                let message = message.as_ref().clone();
+                let alert = rfd::AsyncMessageDialog::new()
+                .set_buttons(rfd::MessageButtons::OkCancel)
+                .set_title("Увага!")
+                .set_level(rfd::MessageLevel::Warning)
+                .set_description(alert);
+                return Task::perform(
+                    alert.show(),
+                    move |res| if let MessageDialogResult::Ok = res {
+                        message.into()
+                    }
+                    else {
+                        MainMessage::None
+                    }
+                );
+            },
+            Message::ClearSignal => {
+                use std::fs::remove_file;
+                if let Err(e) = remove_file("signal_data.db") {
+                    warn!("Error while clearing signal: {}", e)
+                }
+                if let Err(e) = remove_file("signal_data.db-shm") {
+                    warn!("Error while clearing signal: {}", e)
+                }
+                if let Err(e) = remove_file("signal_data.db-wal") {
+                    warn!("Error while clearing signal: {}", e)
+                }
+                return Task::batch([
+                    Task::done(SignalMessage::Disconnect.into()),
+                    Task::done(ui::side_menu::Message::SetSignalState(ui::side_menu::LinkState::Unlinked).into()),
+                ]);
+            },
+            Message::ClearWhatsapp => {
+                use std::fs::remove_file;
+                if let Err(e) = remove_file("signal_data.db") {
+                    warn!("Error while clearing signal: {}", e)
+                }
+                if let Err(e) = remove_file("signal_data.db-shm") {
+                    warn!("Error while clearing signal: {}", e)
+                }
+                if let Err(e) = remove_file("signal_data.db-wal") {
+                    warn!("Error while clearing signal: {}", e)
+                }
+                return Task::done(MainMessage::SetWhatsappClient(None));
+            },
         }
 
         Task::none()
@@ -216,7 +265,7 @@ impl SettingsScreen {
                                     .push(
                                         button("Застосувати")
                                         .on_press_maybe(self.address_correct.then_some(Message::RestartServer))
-                                        .style(button_primary)
+                                        .style(button_wrapper(button::primary))
                                     )
                                 )
                             )
@@ -297,15 +346,71 @@ impl SettingsScreen {
                         Row::new()
                         .spacing(10)
                         .push(
-                            button("Завантажити налаштування")
+                            button(
+                                Row::new()
+                                .spacing(5)
+                                .push(
+                                    icon!(file_open)
+                                )
+                                .push(
+                                    "Завантажити налаштування"
+                                )
+                            )
                             .on_press(Message::ChooseImport)
-                            .style(button_secondary)
+                            .style(button_wrapper(button::secondary))
                             .padding(10)
                         )
                         .push(
-                            button("Зберегти налаштування")
+                            button(
+                                Row::new()
+                                .spacing(5)
+                                .push(
+                                    icon!(save)
+                                )
+                                .push(
+                                    "Зберегти налаштування"
+                                )
+                            )
                             .on_press(Message::ChooseExport)
-                            .style(button_primary)
+                            .style(button_wrapper(button::primary))
+                            .padding(10)
+                        )
+                    )
+                    .push(
+                        Row::new()
+                        .spacing(10)
+                        .push(
+                            button(
+                                Row::new()
+                                .spacing(5)
+                                .align_y(Alignment::Center)
+                                .push(
+                                    svg(svg::Handle::from_memory(SIGNAL_ICON))
+                                    .style(|theme: &iced::Theme, _status| svg::Style { color: Some(theme.extended_palette().danger.base.text) })
+                                    .height(24)
+                                    .width(Length::Shrink)
+                                )
+                                .push("Видалити дані Signal")
+                            )
+                            .on_press(Message::ShowAlert("Ви точно хочете видалити дані Signal?".to_owned(), Box::new(Message::ClearSignal)))
+                            .style(button_wrapper(button::danger))
+                            .padding(10)
+                        )
+                        .push(
+                            button(
+                                Row::new()
+                                .spacing(5)
+                                .align_y(Alignment::Center)
+                                .push(
+                                    svg(svg::Handle::from_memory(WHATSAPP_ICON))
+                                    .style(|theme: &iced::Theme, _status| svg::Style { color: Some(theme.extended_palette().danger.base.text) })
+                                    .height(24)
+                                    .width(Length::Shrink)
+                                )
+                                .push("Видалити дані Whatsapp")
+                            )
+                            .on_press(Message::ShowAlert("Ви точно хочете видалити дані Whatsapp?".to_owned(), Box::new(Message::ClearWhatsapp)))
+                            .style(button_wrapper(button::danger))
                             .padding(10)
                         )
                     )
@@ -319,7 +424,7 @@ impl SettingsScreen {
                             debug.then(
                                 || button("Завантажити список мереж")
                                 .on_press(Message::ChooseNetworkFile)
-                                .style(button_primary)
+                                .style(button_wrapper(button::primary))
                             )
                         }
                     )
@@ -345,20 +450,13 @@ fn container_style(theme: &iced::Theme) -> container::Style {
     }
 }
 
-fn button_primary(theme: &iced::Theme, status: button::Status) -> button::Style {
-    let border = Border::default().rounded(10);
-    button::Style {
-        border,
-        shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
-        ..button::primary(theme, status)
-    }
-}
-
-fn button_secondary(theme: &iced::Theme, status: button::Status) -> button::Style {
-    let border = Border::default().rounded(10);
-    button::Style {
-        border,
-        shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
-        ..button::secondary(theme, status)
+fn button_wrapper<'a>(style_fn: impl Fn(&iced::Theme, button::Status) -> button::Style + 'a) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'a {
+    move |theme, status| {
+        let border = Border::default().rounded(10);
+        button::Style {
+            border,
+            shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
+            ..style_fn(theme, status)
+        }
     }
 }
