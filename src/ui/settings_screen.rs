@@ -2,7 +2,7 @@ use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vec
 use rfd::{FileHandle, MessageDialogResult};
 use tracing::{error, warn};
 
-use crate::{icon, messangers::signal::SignalMessage, notification, send_categories::parse_networks_data, ui::{self, AppData, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}, theme::Theme}};
+use crate::{icon, messangers::signal::SignalMessage, notification, send_categories::parse_networks_data, ui::{self, AppData, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}, side_menu::LinkState, theme::Theme}};
 
 use super::Message as MainMessage;
 
@@ -194,21 +194,24 @@ impl SettingsScreen {
                 }
                 return Task::batch([
                     Task::done(SignalMessage::Disconnect.into()),
-                    Task::done(ui::side_menu::Message::SetSignalState(ui::side_menu::LinkState::Unlinked).into()),
+                    Task::done(ui::side_menu::Message::SetSignalState(LinkState::Unlinked).into()),
                 ]);
             },
             Message::ClearWhatsapp => {
                 use std::fs::remove_file;
-                if let Err(e) = remove_file("signal_data.db") {
-                    warn!("Error while clearing signal: {}", e)
+                if let Err(e) = remove_file("whatsapp_data.db") {
+                    warn!("Error while clearing whatsapp: {}", e)
                 }
-                if let Err(e) = remove_file("signal_data.db-shm") {
-                    warn!("Error while clearing signal: {}", e)
+                if let Err(e) = remove_file("whatsapp_data.db-shm") {
+                    warn!("Error while clearing whatsapp: {}", e)
                 }
-                if let Err(e) = remove_file("signal_data.db-wal") {
-                    warn!("Error while clearing signal: {}", e)
+                if let Err(e) = remove_file("whatsapp_data.db-wal") {
+                    warn!("Error while clearing whatsapp: {}", e)
                 }
-                return Task::done(MainMessage::SetWhatsappClient(None));
+                return Task::batch([
+                    Task::done(MainMessage::SetWhatsappClient(None)),
+                    Task::done(ui::side_menu::Message::SetWhatsappState(LinkState::Unlinked).into())
+                ]);
             },
         }
 
