@@ -52,7 +52,7 @@ fn main() {
         App::subscription,
         App::view,
     )
-    .title("Modern Sender v1.0-rc5")
+    .title("Modern Sender v1.0")
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
     .font(include_bytes!("ui/icons/MaterialIcons-Regular.ttf"))

@@ -171,6 +171,7 @@ impl MainScreen {
                         }
                     }
                 }
+
                 
                 if use_general || groups.is_empty() {
                     log::info!("Getting general");
@@ -179,6 +180,9 @@ impl MainScreen {
                             message.push(key.clone(), group.send_mode);
                         }
                     }
+                }
+                for (key, mode) in groups {
+                    message.push(key.clone(), mode);
                 }
                 
                 let message = Arc::new(message);
