@@ -10,8 +10,8 @@ exclude = ["sqlite-storage"]
 futures = "0.3.31"
 image = "0.25.8"
 simplelog = "0.12.2"
-presage = { git = "https://github.com/whisperfish/presage", rev = "c3d4dd56444e264bbd9b416968e121c1fdc6972e" }
-presage-store-sqlite = { git = "https://github.com/whisperfish/presage", rev = "c3d4dd56444e264bbd9b416968e121c1fdc6972e" }
+presage = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
+presage-store-sqlite = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
 log = "0.4.28"
 serde = {version = "1.0.228", features = ["derive"]}
 anyhow = "1.0.100"
