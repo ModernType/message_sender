@@ -265,9 +265,15 @@ async fn link(mut msg_send_channel: UnboundedSender<crate::ui::Message>) -> anyh
     }
 }
 
+async fn count_groups(manager: &Manager) -> anyhow::Result<usize> {
+    Ok(manager.store().groups().await?.count())
+}
+
 async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut manager: Manager) -> anyhow::Result<()> {
     let reciever = manager.receive_messages().await?;
     pin_mut!(reciever);
+    let mut group_count = count_groups(&manager).await.unwrap_or(0);
+
     while let Some(msg) = reciever.next().await {
         match msg {
             presage::model::messages::Received::Contacts => {
@@ -275,6 +281,12 @@ async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut man
             }
             presage::model::messages::Received::Content(_) => {
                 info!("Got message");
+                let cur_count = count_groups(&manager).await.unwrap_or(group_count);
+                if group_count != cur_count {
+                    info!("Signal group count changed");
+                    group_count = cur_count;
+                    _ = msg_send_channel.send(crate::ui::Message::UpdateGroupList).await;
+                }
             }
             presage::model::messages::Received::QueueEmpty => {
                 _ = msg_send_channel.send(crate::ui::Message::Synced).await;
@@ -284,7 +296,6 @@ async fn sync(mut msg_send_channel: UnboundedSender<crate::ui::Message>, mut man
     log::error!("Sync suspended");
     _ = msg_send_channel.send(ui::Message::SignalDisconnected).await;
 
-    #[allow(unreachable_code)]
     Ok(())
 }
 
