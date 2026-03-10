@@ -4,7 +4,7 @@ use derive_more::Display;
 use iced::border::Radius;
 use iced::{Alignment, Border, Color, Length, Padding, Shadow, Vector};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, combo_box, container, mouse_area, scrollable, space, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, container, mouse_area, pick_list, scrollable, space, text, text_input};
 
 use crate::icon;
 use crate::message::SendMode;
@@ -20,7 +20,6 @@ pub struct CategoryScreen {
     edit_new_name_id: iced::widget::Id,
     parameter_search: String,
     group_search: String,
-    parameter_choose: combo_box::State<ParameterChoose>,
     selected_parameter: ParameterChoose,
 }
 
@@ -57,11 +56,6 @@ impl CategoryScreen {
             edit_new_name_id: iced::widget::Id::unique(),
             parameter_search: String::new(),
             group_search: String::new(),
-            parameter_choose: combo_box::State::new(vec![
-                ParameterChoose::Network,
-                ParameterChoose::Source,
-                ParameterChoose::Comment,
-            ]),
             selected_parameter: ParameterChoose::Network,
         }
     }
@@ -807,9 +801,8 @@ impl CategoryScreen {
             .align_x(Alignment::Center)
             .padding(10)
             .push(
-                combo_box(
-                    &self.parameter_choose,
-                    "Виберіть параметр",
+                pick_list(
+                    ParameterChoose::ALL,
                     Some(&self.selected_parameter),
                     move |param| Message::ParameterChoose(index, param)
                 )
@@ -968,7 +961,7 @@ fn text_input_style(theme: &iced::Theme, status: text_input::Status) -> text_inp
     }
 }
 
-#[derive(Debug, Display, Clone, Copy)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
 enum ParameterChoose {
     #[display("Мережі")]
     Network,
@@ -976,4 +969,12 @@ enum ParameterChoose {
     Source,
     #[display("Коментарі")]
     Comment,
+}
+
+impl ParameterChoose {
+    const ALL: &[Self] = &[
+        Self::Network,
+        Self::Source,
+        Self::Comment,
+    ];
 }
