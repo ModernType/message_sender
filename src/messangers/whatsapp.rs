@@ -50,7 +50,16 @@ async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<(
             Event::Disconnected(_) => {
                 _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Disconnected).into()).await;
             },
-            _other_event => ()
+            Event::LoggedOut(_) => {
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Disconnected).into()).await;
+            },
+            Event::JoinedGroup(_) => {
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::UpdateGroupList).await;
+            },
+            Event::GroupInfoUpdate { .. } => {
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::UpdateGroupList).await;
+            }
+            other_event => log::info!("Whatsapp event: {other_event:?}"),
         }
     })
     .build()
