@@ -1,5 +1,5 @@
 mod deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use deserialize::{NetworkInfo, parse_networks_data};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ pub type NetworksPool = HashMap<u64, NetworkInfo>;
 pub struct SendCategory {
     name: String,
     pub use_general: bool,
-    pub networks: Vec<u64>,
+    pub parameters: Parameters,
     pub groups: HashMap<Key, SendMode>,
 }
 
@@ -21,7 +21,7 @@ impl SendCategory {
         Self {
             name,
             use_general: true,
-            networks: Vec::new(),
+            parameters: Parameters::Networks(Vec::new()),
             groups: HashMap::new(),
         }
     }
@@ -31,8 +31,36 @@ impl SendCategory {
     }
 
     pub fn contains_network(&self, id: &u64) -> bool {
-        self.networks.contains(id)
+        if let Parameters::Networks(networks) = &self.parameters {
+            networks.contains(id)
+        }
+        else {
+            false
+        }
+    }
+
+    pub fn contains_source(&self, source: &String) -> bool {
+        if let Parameters::Sources(sources) = &self.parameters {
+            sources.contains(source)
+        }
+        else {
+            false
+        }
+    }
+
+    pub fn contains_comment(&self, comment: &String) -> bool {
+        if let Parameters::Comments(comments) = &self.parameters {
+            comments.contains(comment)
+        }
+        else {
+            false
+        }
     }
 }
 
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Parameters {
+    Networks(Vec<u64>),
+    Sources(HashSet<String>),
+    Comments(HashSet<String>),
+}

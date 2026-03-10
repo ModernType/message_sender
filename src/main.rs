@@ -1,7 +1,7 @@
 #![feature(string_remove_matches)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{fs::File, panic::PanicHookInfo};
+use std::panic::PanicHookInfo;
 use tracing::level_filters::LevelFilter;
 
 use crate::ui::App;
@@ -37,7 +37,7 @@ fn main() {
 
     #[cfg(not(debug_assertions))]
     {
-        let log_file = File::create("sender.log").unwrap();
+        let log_file = std::fs::File::create("sender.log").unwrap();
         tracing_subscriber::FmtSubscriber::builder()
         .pretty()
         .with_max_level(LevelFilter::WARN)

@@ -192,6 +192,7 @@ impl SettingsScreen {
                 if let Err(e) = remove_file("signal_data.db-wal") {
                     warn!("Error while clearing signal: {}", e)
                 }
+                data.signal_logged = false;
                 return Task::batch([
                     Task::done(SignalMessage::Disconnect.into()),
                     Task::done(ui::side_menu::Message::SetSignalState(LinkState::Unlinked).into()),
@@ -208,6 +209,7 @@ impl SettingsScreen {
                 if let Err(e) = remove_file("whatsapp_data.db-wal") {
                     warn!("Error while clearing whatsapp: {}", e)
                 }
+                data.whatsapp_logged = false;
                 return Task::batch([
                     Task::done(MainMessage::SetWhatsappClient(None)),
                     Task::done(ui::side_menu::Message::SetWhatsappState(LinkState::Unlinked).into())

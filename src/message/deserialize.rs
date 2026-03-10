@@ -37,8 +37,7 @@ pub struct MessageInner {
     pub frequency: String,
     pub location: String,
     pub title: String,
-    #[serde(rename = "source")]
-    pub _source: String,
+    pub source: String,
     #[serde(rename = "radionetworkID")]
     pub network_id: Option<u64>,
 }

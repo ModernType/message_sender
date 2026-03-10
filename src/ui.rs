@@ -1,12 +1,12 @@
 use std::{
-    collections::HashMap, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, path::Path, sync::Arc, time::{Duration, Instant}
+    collections::{HashMap, HashSet}, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, path::Path, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, container, text}};
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, SendCategory}, ui::{category_screen::CategoryScreen, side_menu::{LinkState, SideMenu}, theme::Theme}};
+use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, Parameters, SendCategory}, ui::{category_screen::CategoryScreen, side_menu::{LinkState, SideMenu}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -316,12 +316,20 @@ impl App {
             },
             Message::AcceptMessage(messages) => {
                 let autosend = messages.iter().fold(self.data.autosend, |autosend, msg| autosend && !msg.autosend_overwrite);
+                for m in messages.iter() {
+                    if let Some(source) = &m.source && !self.data.sources.contains(source) {
+                        self.data.sources.insert(source.clone());
+                    }
+                    if let Some(comment) = &m.comment && !self.data.comments.contains(comment) {
+                        self.data.comments.insert(comment.clone());
+                    }
+                }
 
                 if autosend {
                     Task::batch(
                         messages
                         .into_iter()
-                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.text, msg.freq, msg.network).into()))
+                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.text, msg.freq, msg.network, msg.source, msg.comment).into()))
                     )
                 }
                 else {
@@ -376,7 +384,9 @@ impl App {
             },
             Message::RecivedNetworks(networks) => {
                 for cat in self.data.categories.iter_mut() {
-                    cat.networks.retain(|id| networks.contains_key(id));
+                    if let Parameters::Networks(cat_networks) = &mut cat.parameters {
+                        cat_networks.retain(|id| networks.contains_key(id));
+                    }
                 }
                 self.data.networks = networks;
                 Task::done(Message::Notification("Нові мережі додані!".to_owned()))
@@ -479,6 +489,8 @@ pub struct AppData {
     pub theme: Theme,
     pub categories: Vec<SendCategory>,
     pub networks: NetworksPool,
+    pub sources: HashSet<String>,
+    pub comments: HashSet<String>,
     pub show_groups: bool,
     pub autoupdate_groups: bool,
     pub message_file: bool,
@@ -499,6 +511,8 @@ impl Default for AppData {
             theme: Theme::None,
             categories: Vec::new(),
             networks: HashMap::new(),
+            sources: HashSet::new(),
+            comments: HashSet::new(),
             show_groups: true,
             autoupdate_groups: true,
             message_file: false,

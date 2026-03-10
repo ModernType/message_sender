@@ -1,14 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use derive_more::Display;
 use iced::border::Radius;
 use iced::{Alignment, Border, Color, Length, Padding, Shadow, Vector};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, container, mouse_area, scrollable, space, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, combo_box, container, mouse_area, scrollable, space, text, text_input};
 
 use crate::icon;
 use crate::message::SendMode;
 use crate::messangers::Key;
-use crate::send_categories::{NetworkInfo, SendCategory};
+use crate::send_categories::{NetworkInfo, Parameters, SendCategory};
 use crate::ui::{AppData, Message as MainMessage};
 use crate::ui::main_screen::Group;
 
@@ -17,8 +18,10 @@ pub struct CategoryScreen {
     pub new_category_name: Option<String>,
     pub selected_category: Option<usize>,
     edit_new_name_id: iced::widget::Id,
-    network_search: String,
+    parameter_search: String,
     group_search: String,
+    parameter_choose: combo_box::State<ParameterChoose>,
+    selected_parameter: ParameterChoose,
 }
 
 #[derive(Debug, Clone)]
@@ -30,10 +33,13 @@ pub enum Message {
     ShowGeneral,
     ToggleGroup(usize, Key, SendMode),
     ToggleNetwork(usize, u64, bool),
+    ToggleSource(usize, String, bool),
+    ToggleComment(usize, String, bool),
     ToggleGeneralGroup(Key, SendMode),
     ToggleUseGeneral(usize, bool),
     NetworkSerch(String),
     GroupSearch(String),
+    ParameterChoose(usize, ParameterChoose),
     Empty,
 }
 
@@ -49,8 +55,14 @@ impl CategoryScreen {
             new_category_name: None,
             selected_category: None,
             edit_new_name_id: iced::widget::Id::unique(),
-            network_search: String::new(),
+            parameter_search: String::new(),
             group_search: String::new(),
+            parameter_choose: combo_box::State::new(vec![
+                ParameterChoose::Network,
+                ParameterChoose::Source,
+                ParameterChoose::Comment,
+            ]),
+            selected_parameter: ParameterChoose::Network,
         }
     }
 
@@ -76,10 +88,15 @@ impl CategoryScreen {
             },
             Message::CategoryToggled(index) => {
                 if let Some(cur_index) = self.selected_category && cur_index == index {
-                    self.selected_category = None
+                    self.selected_category = None;
                 }
                 else {
-                    self.selected_category = Some(index)
+                    self.selected_category = Some(index);
+                    self.selected_parameter = match &data.categories[index].parameters {
+                        Parameters::Networks(_) => ParameterChoose::Network,
+                        Parameters::Sources(_) => ParameterChoose::Source,
+                        Parameters::Comments(_) => ParameterChoose::Comment,
+                    };
                 }
                 self.new_category_name = None;
             },
@@ -101,11 +118,35 @@ impl CategoryScreen {
             },
             Message::ToggleNetwork(index, network, state) => {
                 let category = &mut data.categories[index];
-                if state {
-                    category.networks.push(network);
+                if let Parameters::Networks(networks) = &mut category.parameters {
+                    if state {
+                        networks.push(network);
+                    }
+                    else {
+                        networks.retain(|v| *v != network);
+                    }
                 }
-                else {
-                    category.networks.retain(|v| *v != network);
+            },
+            Message::ToggleSource(index, source, state) => {
+                let category = &mut data.categories[index];
+                if let Parameters::Sources(sources) = &mut category.parameters {
+                    if state {
+                        sources.insert(source);
+                    }
+                    else {
+                        sources.remove(&source);
+                    }
+                }
+            },
+            Message::ToggleComment(index, comment, state) => {
+                let category = &mut data.categories[index];
+                if let Parameters::Comments(comments) = &mut category.parameters {
+                    if state {
+                        comments.insert(comment);
+                    }
+                    else {
+                        comments.remove(&comment);
+                    }
                 }
             },
             Message::ToggleUseGeneral(index, state) => {
@@ -113,7 +154,7 @@ impl CategoryScreen {
                 cat.use_general = state;
             },
             Message::NetworkSerch(s) => {
-                self.network_search = s
+                self.parameter_search = s
             },
             Message::GroupSearch(s) => {
                 self.group_search = s
@@ -121,7 +162,17 @@ impl CategoryScreen {
             Message::Empty => {
                 self.new_category_name = None;
                 self.selected_category = None;
-            }
+            },
+            Message::ParameterChoose(index, param) => {
+                self.selected_parameter = param;
+                
+                let category = &mut data.categories[index];
+                match param {
+                    ParameterChoose::Network => category.parameters = Parameters::Networks(Vec::new()),
+                    ParameterChoose::Source => category.parameters = Parameters::Sources(HashSet::new()),
+                    ParameterChoose::Comment => category.parameters = Parameters::Comments(HashSet::new()),
+                }
+            },
         }
 
         Task::none()
@@ -536,89 +587,235 @@ impl CategoryScreen {
         .into()
     }
 
-    fn category_networks<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
-        let mut active = Vec::new();
-        let mut other = Vec::new();
-
+    fn category_parameters<'a>(&'a self, index: usize, data: &'a AppData) -> Element<'a, Message> {
         macro_rules! vec_to_col {
             ($name:ident, $map:expr) => {
                 let $name = $name.into_iter().fold(
                     Column::new()
                     .spacing(5),
-                    |col, (key, group)| col.push(($map)(key, group))
+                    |col, val| col.push(($map)(val))
                 );
             };
         }
 
         let category = &data.categories[index];
-        for (id, network) in data.networks.iter().filter(|(_, net)| net.name.contains(&self.network_search)) {
-            if category.networks.contains(id) {
-                active.push((id, network))
-            }
-            else {
-                other.push((id, network))
-            }
-        }
+        let (active, other) = match category.parameters {
+            Parameters::Networks(_) => {
+                let mut active = Vec::new();
+                let mut other = Vec::new();
 
-        vec_to_col!(active, |id: &'a u64, network: &'a NetworkInfo| -> container::Container<'a, _> {
-            container(
-                Row::new()
-                .width(Length::Fill)
-                .padding(5)
-                .spacing(5)
-                .align_y(Alignment::Center)
-                .push(
-                    text(&network.name)
-                    .width(Length::Fill)
-                )
-                .push(
-                    button(
-                        icon!(remove)
-                        .size(22)
-                    )
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::ToggleNetwork(index, *id, false))
-                )
-            )
-            .style(entry_style)
-        });
+                for (id, network) in data.networks.iter().filter(|(_, net)| net.name.contains(&self.parameter_search)) {
+                    if category.contains_network(id) {
+                        active.push((id, network))
+                    }
+                    else {
+                        other.push((id, network))
+                    }
+                }
 
-        vec_to_col!(other, |id: &'a u64, network: &'a NetworkInfo| -> container::Container<'a, _> {
-            container(
-                Row::new()
-                .width(Length::Fill)
-                .padding(5)
-                .spacing(5)
-                .align_y(Alignment::Center)
-                .push(
-                    text(&network.name)
-                    .width(Length::Fill)
-                )
-                .push(
-                    button(
-                        icon!(add)
-                        .size(22)
+                macro_rules! vec_to_col {
+                    ($name:ident, $map:expr) => {
+                        let $name = $name.into_iter().fold(
+                            Column::new()
+                            .spacing(5),
+                            |col, (key, group)| col.push(($map)(key, group))
+                        );
+                    };
+                }
+
+                vec_to_col!(active, |id: &'a u64, network: &'a NetworkInfo| -> container::Container<'a, _> {
+                    container(
+                        Row::new()
+                        .width(Length::Fill)
+                        .padding(5)
+                        .spacing(5)
+                        .align_y(Alignment::Center)
+                        .push(
+                            text(&network.name)
+                            .width(Length::Fill)
+                        )
+                        .push(
+                            button(
+                                icon!(remove)
+                                .size(22)
+                            )
+                            .padding(0)
+                            .style(button::text)
+                            .on_press(Message::ToggleNetwork(index, *id, false))
+                        )
                     )
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::ToggleNetwork(index, *id, true))
-                )
-            )
-            .style(entry_style)
-        });
+                    .style(entry_style)
+                });
+
+                vec_to_col!(other, |id: &'a u64, network: &'a NetworkInfo| -> container::Container<'a, _> {
+                    container(
+                        Row::new()
+                        .width(Length::Fill)
+                        .padding(5)
+                        .spacing(5)
+                        .align_y(Alignment::Center)
+                        .push(
+                            text(&network.name)
+                            .width(Length::Fill)
+                        )
+                        .push(
+                            button(
+                                icon!(add)
+                                .size(22)
+                            )
+                            .padding(0)
+                            .style(button::text)
+                            .on_press(Message::ToggleNetwork(index, *id, true))
+                        )
+                    )
+                    .style(entry_style)
+                });
+
+                (active, other)
+            },
+            Parameters::Sources(_) => {
+                let mut active = Vec::new();
+                let mut other = Vec::new();
+
+                for source in data.sources.iter().filter(|source| source.contains(&self.parameter_search)) {
+                    if category.contains_source(source) {
+                        active.push(source);
+                    }
+                    else {
+                        other.push(source)
+                    }
+                }
+
+                vec_to_col!(active, |source: &'a String| -> container::Container<'a, _> {
+                    container(
+                        Row::new()
+                        .width(Length::Fill)
+                        .padding(5)
+                        .spacing(5)
+                        .align_y(Alignment::Center)
+                        .push(
+                            text(source)
+                            .width(Length::Fill)
+                        )
+                        .push(
+                            button(
+                                icon!(remove)
+                                .size(22)
+                            )
+                            .padding(0)
+                            .style(button::text)
+                            .on_press(Message::ToggleSource(index, source.clone(), false))
+                        )
+                    )
+                    .style(entry_style)
+                });
+
+                vec_to_col!(other, |source: &'a String| -> container::Container<'a, _> {
+                    container(
+                        Row::new()
+                        .width(Length::Fill)
+                        .padding(5)
+                        .spacing(5)
+                        .align_y(Alignment::Center)
+                        .push(
+                            text(source)
+                            .width(Length::Fill)
+                        )
+                        .push(
+                            button(
+                                icon!(add)
+                                .size(22)
+                            )
+                            .padding(0)
+                            .style(button::text)
+                            .on_press(Message::ToggleSource(index, source.clone(), true))
+                        )
+                    )
+                    .style(entry_style)
+                });
+
+                (active, other)
+            },
+            Parameters::Comments(_) => {
+                let mut active = Vec::new();
+                let mut other = Vec::new();
+
+                for comment in data.comments.iter().filter(|comment| comment.contains(&self.parameter_search)) {
+                    if category.contains_comment(comment) {
+                        active.push(comment);
+                    }
+                    else {
+                        other.push(comment)
+                    }
+                }
+
+                vec_to_col!(active, |comment: &'a String| -> container::Container<'a, _> {
+                    container(
+                        Row::new()
+                        .width(Length::Fill)
+                        .padding(5)
+                        .spacing(5)
+                        .align_y(Alignment::Center)
+                        .push(
+                            text(comment)
+                            .width(Length::Fill)
+                        )
+                        .push(
+                            button(
+                                icon!(remove)
+                                .size(22)
+                            )
+                            .padding(0)
+                            .style(button::text)
+                            .on_press(Message::ToggleComment(index, comment.clone(), false))
+                        )
+                    )
+                    .style(entry_style)
+                });
+
+                vec_to_col!(other, |comment: &'a String| -> container::Container<'a, _> {
+                    container(
+                        Row::new()
+                        .width(Length::Fill)
+                        .padding(5)
+                        .spacing(5)
+                        .align_y(Alignment::Center)
+                        .push(
+                            text(comment)
+                            .width(Length::Fill)
+                        )
+                        .push(
+                            button(
+                                icon!(add)
+                                .size(22)
+                            )
+                            .padding(0)
+                            .style(button::text)
+                            .on_press(Message::ToggleComment(index, comment.clone(), true))
+                        )
+                    )
+                    .style(entry_style)
+                });
+
+                (active, other)
+            },
+        };
 
         container(
             Column::new()
             .spacing(7)
+            .align_x(Alignment::Center)
             .padding(10)
             .push(
-                text("Мережі")
-                .center()
-                .width(Length::Fill)
+                combo_box(
+                    &self.parameter_choose,
+                    "Виберіть параметр",
+                    Some(&self.selected_parameter),
+                    move |param| Message::ParameterChoose(index, param)
+                )
             )
             .push(
-                text_input("Пошук", &self.network_search)
+                text_input("Пошук", &self.parameter_search)
                 .style(text_input_style)
                 .on_input(Message::NetworkSerch)
                 .width(Length::Fill)
@@ -676,7 +873,7 @@ impl CategoryScreen {
                         self.category_groups(index, data)
                     )
                     .push(
-                        self.category_networks(index, data)
+                        self.category_parameters(index, data)
                     )
                 )
                 .push(
@@ -769,4 +966,14 @@ fn text_input_style(theme: &iced::Theme, status: text_input::Status) -> text_inp
         },
         ..text_input::default(theme, status)
     }
+}
+
+#[derive(Debug, Display, Clone, Copy)]
+enum ParameterChoose {
+    #[display("Мережі")]
+    Network,
+    #[display("Джерела")]
+    Source,
+    #[display("Коментарі")]
+    Comment,
 }

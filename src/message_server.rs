@@ -66,18 +66,23 @@ pub struct AcceptedMessage {
     pub text: String,
     pub freq: Option<String>,
     pub network: Option<u64>,
+    pub source: Option<String>,
+    pub comment: Option<String>,
     pub autosend_overwrite: bool,
 }
 
 impl From<OperatorMessage> for AcceptedMessage {
     fn from(value: OperatorMessage) -> Self {
         let freq = Some(value.0.frequency.to_string());
+        let has_source = !value.source.is_empty();
 
         Self {
             text: value.to_string(),
             freq,
             network: value.0.network_id,
-            autosend_overwrite: false
+            source: has_source.then_some(value.0.source),
+            comment: value.0.comment,
+            autosend_overwrite: false,
         }
     }
 }
@@ -88,6 +93,8 @@ impl From<String> for AcceptedMessage {
             text: value,
             freq: None,
             network: None,
+            source: None,
+            comment: None,
             autosend_overwrite: false
         }
     }

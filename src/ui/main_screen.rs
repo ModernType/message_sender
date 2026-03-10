@@ -14,7 +14,7 @@ pub enum Message {
     SetRegisterUrl(Option<url::Url>),
     SetWhatsappUrl(Option<String>),
     TextEdit(text_editor::Action),
-    SendMessage(String, Option<String>, Option<u64>),
+    SendMessage(String, Option<String>, Option<u64>, Option<String>, Option<String>),
     SendMessagePressed,
     SetGroups(Vec<(Key, String)>),
     UpdateMessageHistory,
@@ -109,28 +109,28 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
-                let (text, freq, network) = if let Some(mut message) = self.cur_message.take() {
+                let (text, freq, network, source, comment) = if let Some(mut message) = self.cur_message.take() {
                     message.text = self.message_content.text();
-                    (message.text, message.freq, message.network)
+                    (message.text, message.freq, message.network, message.source, message.comment)
                 }
                 else {
-                    (self.message_content.text(), None, None)
+                    (self.message_content.text(), None, None, None, None)
                 };
 
                 self.message_content = text_editor::Content::new();
 
                 return Task::batch([
                     Task::done(Message::NextMessage.into()),
-                    Task::done(Message::SendMessage(text, freq, network).into()),
+                    Task::done(Message::SendMessage(text, freq, network, source, comment).into()),
                 ])
             }
-            Message::SendMessage(message, freq, network) => {
-                let mut message = SendMessageInfo::new(message, freq);
+            Message::SendMessage(message, freq, network, source, comment) => {
+                let mut message = SendMessageInfo::new(message, freq, source.clone(), comment.clone());
+                let mut groups: HashMap<&Key, SendMode> = HashMap::new();
+                let mut use_general = false;
 
                 if let Some(network) = network {
                     log::info!("Has network {}", &network);
-                    let mut groups: HashMap<&Key, SendMode> = HashMap::new();
-                    let mut use_general = false;
 
                     for category in data.categories.iter() {
                         if category.contains_network(&network) {
@@ -142,32 +142,37 @@ impl MainScreen {
                             use_general |= category.use_general;
                         }
                     }
+                }
+                if let Some(source) = source {
+                    log::info!("Has source {}", &source);
 
-                    if !groups.is_empty() {
-                        log::info!("Has in category");
-                        if use_general {
-                            for (key, group) in data.groups.iter() {
-                                if group.active() {
-                                    groups.entry(key)
-                                    .and_modify(|mode| mode.update(group.send_mode))
-                                    .or_insert(group.send_mode);
-                                }
+                    for category in data.categories.iter() {
+                        if category.contains_source(&source) {
+                            for (key, mode) in category.groups.iter() {
+                                groups.entry(key)
+                                .and_modify(|mode| mode.update(*mode))
+                                .or_insert(*mode);
                             }
-                        }
-                        for (key, mode) in groups.into_iter().filter(|(_, mode)| *mode != SendMode::Off) {
-                            message.push(key.clone(), mode);
-                        }
-                    }
-                    else {
-                        log::info!("Getting general");
-                        for (key, group) in data.groups.iter() {
-                            if group.active() {
-                                message.push(key.clone(), group.send_mode);
-                            }
+                            use_general |= category.use_general;
                         }
                     }
                 }
-                else {
+                if let Some(comment) = comment {
+                    log::info!("Has comment {}", &comment);
+
+                    for category in data.categories.iter() {
+                        if category.contains_comment(&comment) {
+                            for (key, mode) in category.groups.iter() {
+                                groups.entry(key)
+                                .and_modify(|mode| mode.update(*mode))
+                                .or_insert(*mode);
+                            }
+                            use_general |= category.use_general;
+                        }
+                    }
+                }
+                
+                if use_general || groups.is_empty() {
                     log::info!("Getting general");
                     for (key, group) in data.groups.iter() {
                         if group.active() {
