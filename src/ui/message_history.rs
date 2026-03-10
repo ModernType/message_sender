@@ -1,10 +1,12 @@
-use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
+use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}, time::Duration};
 
-use iced::{Alignment, Border, Color, Element, Length, Shadow, Theme, Vector, widget::{Column, Row, button, container, progress_bar, text}};
+use iced::{Alignment, Border, Color, Element, Length, Shadow, Theme, Vector, widget::{Column, Row, button, container, progress_bar, text, tooltip}};
 use serde::{Deserialize, Serialize};
 use wacore_binary::jid::Jid;
 
 use crate::{icon, message::SendMode, messangers::Key};
+
+const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
 
 #[derive(Debug)]
 pub struct SendMessageInfo {
@@ -269,37 +271,70 @@ impl SendMessageInfo {
                 Row::new()
                 .spacing(5)
                 .push(
-                    button(
+                    tooltip(
+                        button(
+                            match status {
+                                SendStatus::Sent => icon!(edit),
+                                _ => icon!(refresh),
+                            }
+                            .size(28)
+                        )
+                        .style(button::text)
+                        .on_press_maybe(match status {
+                            SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
+                            SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
+                            SendStatus::Deleted => Some(super::main_screen::Message::SendMessageDirect(self.clone())),
+                            _ => None,
+                        }),
                         match status {
-                            SendStatus::Sent => icon!(edit),
-                            _ => icon!(refresh),
-                        }
-                        .size(28)
+                            SendStatus::Sent => "Редагувати",
+                            SendStatus::Deleted => "Відправити знову",
+                            _ => "Повторити",
+                        },
+                        tooltip::Position::FollowCursor
                     )
-                    .style(button::text)
-                    .on_press_maybe(match status {
-                        SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
-                        SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
-                        SendStatus::Deleted => Some(super::main_screen::Message::SendMessageDirect(self.clone())),
-                        _ => None,
+                    .delay(TOOLTIP_DELAY)
+                    .snap_within_viewport(true)
+                    .style(|theme| container::Style {
+                        background: Some(theme.extended_palette().background.weaker.color.into()),
+                        text_color: Some(theme.extended_palette().background.weaker.text.into()),
+                        border: Border::default().rounded(5),
+                        shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::ZERO, blur_radius: 2.0 },
+                        ..Default::default()
                     })
                 )
                 .push(
-                    button(
-                        icon!(delete)
-                        .size(28)
-                    )
-                    .style(|theme: &Theme, status| button::Style {
-                        text_color: match status {
-                            button::Status::Active => theme.extended_palette().danger.base.color,
-                            _ => theme.extended_palette().danger.weak.color,
+                    tooltip(
+                        button(
+                            icon!(delete)
+                            .size(28)
+                        )
+                        .style(|theme: &Theme, status| button::Style {
+                            text_color: match status {
+                                button::Status::Active => theme.extended_palette().danger.base.color,
+                                _ => theme.extended_palette().danger.weak.color,
+                            },
+                            ..button::text(theme, status)
+                        })
+                        .on_press_maybe(match status {
+                            SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
+                            SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
+                            _ => None,
+                        }),
+                        match status {
+                            SendStatus::Sent => "Видалити",
+                            _ => "Відмінити",
                         },
-                        ..button::text(theme, status)
-                    })
-                    .on_press_maybe(match status {
-                        SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
-                        SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
-                        _ => None,
+                        tooltip::Position::FollowCursor
+                    )
+                    .delay(TOOLTIP_DELAY)
+                    .snap_within_viewport(true)
+                    .style(|theme| container::Style {
+                        background: Some(theme.extended_palette().background.weaker.color.into()),
+                        text_color: Some(theme.extended_palette().background.weaker.text.into()),
+                        border: Border::default().rounded(5),
+                        shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::ZERO, blur_radius: 3.0 },
+                        ..Default::default()
                     })
                 )
             )
