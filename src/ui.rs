@@ -6,7 +6,7 @@ use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, Parameters, SendCategory}, ui::{category_screen::CategoryScreen, side_menu::{LinkState, SideMenu}, theme::Theme}};
+use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, Parameters, SendCategory}, ui::{category_screen::CategoryScreen, message_history::{SaveMessageInfo, SendStatus}, side_menu::{LinkState, SideMenu}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -40,6 +40,7 @@ pub enum Message {
     SendMessage(Arc<SendMessageInfo>),
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>, Vec<u64>, Vec<String>),
+    LoadMessages(Vec<Arc<SendMessageInfo>>),
     SetScreen(Screen),
     AcceptMessage(Vec<AcceptedMessage>),
     ThemeChange(Theme),
@@ -104,13 +105,22 @@ impl<M: Into<Message>> From<anyhow::Result<M>> for Message {
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let data = AppData::new();
-        let start_task = if data.theme.is_system() {
+        let mut data = AppData::new();
+        let saved_messages = std::mem::take(&mut data.saved_messages).into_iter()
+        .map(|msg_info| Arc::new(SendMessageInfo::from(msg_info)))
+        .collect();
+
+        let theme_task = if data.theme.is_system() {
             iced::system::theme().map(|mode| Message::ThemeChange(mode.into()))
         }
         else {
             Task::none()
         };
+
+        let start_task = Task::batch([
+            theme_task,
+            Task::done(Message::LoadMessages(saved_messages)),
+        ]);
 
         (
             Self {
@@ -161,6 +171,18 @@ impl App {
                 else {
                     Task::none()
                 }
+            },
+            Message::LoadMessages(messages) => {
+                let task = Task::batch(
+                    messages.iter()
+                    .map(|info| Task::done(Message::SendMessage(info.clone())))
+                );
+
+                for m in messages.into_iter().take(self.data.history_len as usize) {
+                    self.main_scr.message_history.push_back(m);
+                }
+
+                task
             },
             Message::SetScreen(screen) => {
                 self.cur_screen = screen;
@@ -344,6 +366,13 @@ impl App {
             },
             Message::OnClose => {
                 log::warn!("Closing application, saving data...");
+
+                let save_messages = self.main_scr.message_history.iter()
+                .filter(|info| matches!(info.status(std::sync::atomic::Ordering::Relaxed), SendStatus::Pending | SendStatus::Sending | SendStatus::Failed))
+                .map(|info |SaveMessageInfo::from(info.as_ref()))
+                .collect();
+                self.data.saved_messages = save_messages;
+
                 self.save().unwrap_or_else(|e| log::error!("Failed to save data: {e}"));
                 iced::exit()
             }
@@ -494,6 +523,7 @@ pub struct AppData {
     pub show_groups: bool,
     pub autoupdate_groups: bool,
     pub message_file: bool,
+    pub saved_messages: Vec<SaveMessageInfo>,
 }
 
 impl Default for AppData {
@@ -516,6 +546,7 @@ impl Default for AppData {
             show_groups: true,
             autoupdate_groups: true,
             message_file: false,
+            saved_messages: Vec::new()
         }
     }
 }

@@ -1,6 +1,7 @@
 use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}};
 
 use iced::{Alignment, Border, Color, Element, Length, Shadow, Theme, Vector, widget::{Column, Row, button, container, progress_bar, text}};
+use serde::{Deserialize, Serialize};
 use wacore_binary::jid::Jid;
 
 use crate::{icon, message::SendMode, messangers::Key};
@@ -178,6 +179,10 @@ impl SendMessageInfo {
         self.status.store(status as u8, ordering);
     }
 
+    pub fn status(&self, ordering: Ordering) -> SendStatus {
+        self.status.load(ordering).into()
+    }
+
     pub fn len(&self) -> usize {
         self.groups_signal.len() + self.groups_whatsapp.len()
     }
@@ -317,5 +322,48 @@ impl SendMessageInfo {
             }
         })
         .into()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveMessageInfo {
+    pub content: String,
+    pub freq: Option<String>,
+    pub source: Option<String>,
+    pub comment: Option<String>,
+    pub groups_signal: Vec<([u8; 32], SendMode)>,
+    pub groups_whatsapp: Vec<(Jid, SendMode)>,
+}
+
+impl From<&SendMessageInfo> for SaveMessageInfo {
+    fn from(value: &SendMessageInfo) -> Self {
+        let groups_signal = value.groups_signal.iter().map(|g| (g.key, g.send_mode)).collect();
+        let groups_whatsapp = value.groups_whatsapp.iter().map(|g| (g.key.clone(), g.send_mode)).collect();
+
+        Self {
+            content: value.content.clone(),
+            freq: value.freq.clone(),
+            source: value.source.clone(),
+            comment: value.comment.clone(),
+            groups_signal,
+            groups_whatsapp,
+        }
+    }
+}
+
+impl From<SaveMessageInfo> for SendMessageInfo {
+    fn from(value: SaveMessageInfo) -> Self {
+        let groups_signal = value.groups_signal.into_iter().map(|(key, mode)| GroupInfoSignal::new(key, mode)).collect();
+        let groups_whatsapp = value.groups_whatsapp.into_iter().map(|(key, mode)| GroupInfoWhatsapp::new(key, mode)).collect();
+
+        Self {
+            content: value.content,
+            freq: value.freq,
+            source: value.source,
+            comment: value.comment,
+            status: AtomicU8::new(SendStatus::Pending as u8),
+            groups_signal,
+            groups_whatsapp,
+        }
     }
 }
