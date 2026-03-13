@@ -150,25 +150,28 @@ impl SignalWorker {
         }
     }
 
-    fn execute_task(&self, message: &SignalMessage) -> AbortHandle {
+    fn execute_task(&self, signal_message: &SignalMessage) -> AbortHandle {
         /// This macro wraps any future, attaches finish sending message, starts its execution and returns abort handle
         macro_rules! message_task {
-            ($e:expr, $finish_send:ident) => {
+            ($message:expr, $e:expr, $finish_send:ident) => {
                 {
                     let handle = tokio::task::spawn_local(
                         $e.then(move |_| async move { $finish_send.send(SignalMessage::Finished).await.unwrap(); })
                     );
-                    handle.abort_handle()
+                    let handle = handle.abort_handle();
+                    $message.set_cancel_handle(handle.clone());
+
+                    handle
                 }
             };
         }
 
         let ui_message_sender = self.ui_message_sender.clone();
         let mut finish_send = self.signal_sender.clone();
-        let abort_handle = match message {
-            SignalMessage::SendMessage(message, markdown) => message_task!(send_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), *markdown), finish_send),
-            SignalMessage::DeleteMessage(message) => message_task!(delete_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone()), finish_send),
-            SignalMessage::EditMessage(message, timestamps, markdown) => message_task!(edit_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), timestamps.clone(), *markdown), finish_send),
+        let abort_handle = match signal_message {
+            SignalMessage::SendMessage(message, markdown) => message_task!(message.clone(), send_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), *markdown), finish_send),
+            SignalMessage::DeleteMessage(message) => message_task!(message.clone(), delete_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone()), finish_send),
+            SignalMessage::EditMessage(message, timestamps, markdown) => message_task!(message.clone(), edit_message(ui_message_sender, self.manager.as_ref().unwrap().clone(), message.clone(), timestamps.clone(), *markdown), finish_send),
             _m => panic!("Other messages should not be here!")
         };
     

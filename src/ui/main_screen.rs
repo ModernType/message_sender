@@ -71,8 +71,7 @@ impl MainScreen {
         match message {
             Message::Cancel(idx) => {
                 let message = &self.message_history[idx];
-                message.set_status(super::message_history::SendStatus::Deleted, std::sync::atomic::Ordering::Relaxed);
-                return Task::done(SignalMessage::Cancel.into());
+                return Task::done(super::Message::CancelMessage(message.clone()));
             },
             Message::RefreshMessage(idx) => {
                 let message = &self.message_history[idx];

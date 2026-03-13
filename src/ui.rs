@@ -40,6 +40,7 @@ pub enum Message {
     SendMessage(Arc<SendMessageInfo>),
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>, Vec<u64>, Vec<String>),
+    CancelMessage(Arc<SendMessageInfo>),
     LoadMessages(Vec<Arc<SendMessageInfo>>),
     SetScreen(Screen),
     AcceptMessage(Vec<AcceptedMessage>),
@@ -335,6 +336,10 @@ impl App {
                     );
                 }
                 Task::batch(task_list)
+            },
+            Message::CancelMessage(message) => {
+                message.cancel(self.ui_message_channel.as_mut().unwrap());
+                Task::none()
             },
             Message::AcceptMessage(messages) => {
                 let autosend = messages.iter().fold(self.data.autosend, |autosend, msg| autosend && !msg.autosend_overwrite);

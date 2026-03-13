@@ -1,5 +1,6 @@
 use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}, time::Duration};
 
+use futures::channel::mpsc::UnboundedSender;
 use iced::{Alignment, Border, Color, Element, Length, Shadow, Theme, Vector, widget::{Column, Row, button, container, progress_bar, text, tooltip}};
 use serde::{Deserialize, Serialize};
 use wacore_binary::jid::Jid;
@@ -17,6 +18,7 @@ pub struct SendMessageInfo {
     pub status: AtomicU8,
     pub groups_signal: Vec<GroupInfoSignal>,
     pub groups_whatsapp: Vec<GroupInfoWhatsapp>,
+    cancel_handle: Mutex<Option<tokio::task::AbortHandle>>,
 }
 
 #[repr(u8)]
@@ -142,6 +144,7 @@ impl SendMessageInfo {
             status: AtomicU8::new(SendStatus::Pending as u8),
             groups_signal: Vec::new(),
             groups_whatsapp: Vec::new(),
+            cancel_handle: Mutex::new(None),
         }
     }
 
@@ -187,6 +190,19 @@ impl SendMessageInfo {
 
     pub fn len(&self) -> usize {
         self.groups_signal.len() + self.groups_whatsapp.len()
+    }
+
+    pub fn set_cancel_handle(&self, handle: tokio::task::AbortHandle) {
+        let mut lock = self.cancel_handle.lock().unwrap();
+        *lock = Some(handle);
+    }
+
+    pub fn cancel(self: &Arc<Self>, ui_message_sender: &mut UnboundedSender<crate::ui::Message>) {
+        let mut lock = self.cancel_handle.lock().unwrap();
+        if let Some(handle) = lock.take() {
+            handle.abort();
+            _ = ui_message_sender.unbounded_send(super::Message::DeleteMessage(self.clone()));
+        }
     }
 
     pub fn view<'a>(self: &'a Arc<Self>, idx: usize) -> Element<'a, super::main_screen::Message, Theme> {
@@ -399,6 +415,7 @@ impl From<SaveMessageInfo> for SendMessageInfo {
             status: AtomicU8::new(SendStatus::Pending as u8),
             groups_signal,
             groups_whatsapp,
+            cancel_handle: Mutex::new(None),
         }
     }
 }
