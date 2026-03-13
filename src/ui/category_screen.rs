@@ -21,6 +21,9 @@ pub struct CategoryScreen {
     parameter_search: String,
     group_search: String,
     selected_parameter: ParameterChoose,
+    cur_networks: Vec<u64>,
+    cur_sources: HashSet<String>,
+    cur_comments: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +60,9 @@ impl CategoryScreen {
             parameter_search: String::new(),
             group_search: String::new(),
             selected_parameter: ParameterChoose::Network,
+            cur_comments: Default::default(),
+            cur_networks: Default::default(),
+            cur_sources: Default::default(),
         }
     }
 
@@ -93,6 +99,9 @@ impl CategoryScreen {
                     };
                 }
                 self.new_category_name = None;
+                self.cur_comments = Default::default();
+                self.cur_sources = Default::default();
+                self.cur_networks = Default::default();
             },
             Message::CategoryDelete(index) => {
                 if self.selected_category.is_some() {
@@ -161,10 +170,16 @@ impl CategoryScreen {
                 self.selected_parameter = param;
                 
                 let category = &mut data.categories[index];
+                let param = match param {
+                    ParameterChoose::Network => std::mem::replace(&mut category.parameters, Parameters::Networks(self.cur_networks.clone())),
+                    ParameterChoose::Source => std::mem::replace(&mut category.parameters, Parameters::Sources(self.cur_sources.clone())),
+                    ParameterChoose::Comment => std::mem::replace(&mut category.parameters, Parameters::Comments(self.cur_comments.clone())),
+                };
+
                 match param {
-                    ParameterChoose::Network => category.parameters = Parameters::Networks(Vec::new()),
-                    ParameterChoose::Source => category.parameters = Parameters::Sources(HashSet::new()),
-                    ParameterChoose::Comment => category.parameters = Parameters::Comments(HashSet::new()),
+                    Parameters::Comments(v) => self.cur_comments = v,
+                    Parameters::Sources(v) => self.cur_sources = v,
+                    Parameters::Networks(v) => self.cur_networks = v,
                 }
             },
         }
