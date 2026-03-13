@@ -32,7 +32,6 @@ pub enum Message {
     EditNewName(String),
     CategoryToggled(usize),
     CategoryDelete(usize),
-    ShowGeneral,
     ToggleGroup(usize, Key, SendMode),
     ToggleNetwork(usize, u64, bool),
     ToggleSource(usize, String, bool),
@@ -41,6 +40,7 @@ pub enum Message {
     ToggleUseGeneral(usize, bool),
     NetworkSerch(String),
     GroupSearch(String),
+    #[expect(private_interfaces)]
     ParameterChoose(usize, ParameterChoose),
     Empty,
 }
@@ -108,9 +108,6 @@ impl CategoryScreen {
                     self.selected_category = None
                 }
                 data.categories.remove(index);
-            },
-            Message::ShowGeneral => {
-                self.selected_category = None;
             },
             Message::ToggleGeneralGroup(key, send_mode) => {
                 data.groups.get_mut(&key).unwrap().send_mode = send_mode;

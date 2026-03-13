@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, container, qr_code, responsive, scrollable, space, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{icon, message::SendMode, message_server::AcceptedMessage, messangers::{Key, signal::SignalMessage}, ui::{AppData, message_history::SendMessageInfo}};
+use crate::{icon, message::SendMode, message_server::AcceptedMessage, messangers::Key, ui::{AppData, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;

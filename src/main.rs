@@ -11,8 +11,6 @@ mod message;
 mod messangers;
 mod message_server;
 mod send_categories;
-#[cfg(test)]
-mod test;
 
 fn panic_message_box(info: &PanicHookInfo) {
     rfd::MessageDialog::new()

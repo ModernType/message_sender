@@ -15,13 +15,11 @@ type Manager = presage::Manager<SqliteStore, Registered>;
 pub enum SignalMessage {
     LinkBegin,
     Linked(Result<Manager, anyhow::Error>),
-    CancelLink,
     Disconnect,
     GetGroups,
     SendMessage(Arc<SendMessageInfo>, bool),
     DeleteMessage(Arc<SendMessageInfo>),
     EditMessage(Arc<SendMessageInfo>, Vec<u64>, bool),
-    Cancel,
     Finished,
 }
 
@@ -103,20 +101,6 @@ impl SignalWorker {
                     self.manager = None;
                     if let Some(handle) = self.abort_handle.take() {
                         handle.abort();
-                    }
-                },
-                SignalMessage::CancelLink => {
-                    if let Some(handle) = self.abort_handle.take() {
-                        handle.abort();
-                    }
-                    send_ui_message(ui_message_sender.clone(), ui::side_menu::Message::SetSignalState(LinkState::Unlinked))
-                },
-                SignalMessage::Cancel => {
-                    if let Some(handle) = self.abort_handle.take() {
-                        handle.abort();
-                    }
-                    if self.manager.is_some() {
-                        self.execute_next_maybe();
                     }
                 },
                 SignalMessage::Finished => {

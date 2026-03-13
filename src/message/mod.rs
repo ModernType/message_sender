@@ -15,14 +15,6 @@ pub enum SendMode {
 }
 
 impl SendMode {
-    pub fn next(self) -> Self {
-        match self {
-            SendMode::Off => Self::Normal,
-            SendMode::Normal => Self::Frequency,
-            SendMode::Frequency => Self::Off,
-        }
-    }
-
     pub fn active(self) -> bool {
         !matches!(self, Self::Off)
     }
