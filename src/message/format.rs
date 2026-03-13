@@ -21,6 +21,7 @@ fn construct_ranges<'a>(pairs: impl Iterator<Item = Pair<'a, Rule>>) -> (String,
     let mut bold: Option<u32> = None;
     let mut italic: Option<u32> = None;
     let mut strikethrough: Option<u32> = None;
+    let mut monospace: Option<u32> = None;
 
     for rule in pairs {
         match rule.as_rule() {
@@ -71,6 +72,20 @@ fn construct_ranges<'a>(pairs: impl Iterator<Item = Pair<'a, Rule>>) -> (String,
                     }
                 }
             },
+            Rule::monospace => {
+                match monospace {
+                    Some(start) => ranges.push(
+                        BodyRange {
+                            start: Some(start),
+                            length: Some(message_length - start),
+                            associated_value: Some(presage::proto::body_range::AssociatedValue::Style(Style::Monospace as i32))
+                        }
+                    ),
+                    None => {
+                        monospace = Some(message_length);
+                    }
+                }
+            },
             _ => continue
         }
     }
@@ -97,6 +112,7 @@ pub fn parse_message_with_whatsapp_format(message: &str) -> Result<String, pest:
             Rule::bold => buf.push('*'),
             Rule::italic => buf.push('_'),
             Rule::strikethrough => buf.push('~'),
+            Rule::monospace => buf.push_str("```"),
             _ => continue,
         }
     }
