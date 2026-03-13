@@ -2,18 +2,39 @@ mod deserialize;
 use std::collections::{HashMap, HashSet};
 
 pub use deserialize::{NetworkInfo, parse_networks_data};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use serde_versioning::Deserialize;
 
 use crate::{message::SendMode, messangers::Key};
 
 pub type NetworksPool = HashMap<u64, NetworkInfo>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[versioning(optimistic, previous_version = "SendCategoryOld")]
 pub struct SendCategory {
     name: String,
     pub use_general: bool,
     pub parameters: Parameters,
     pub groups: HashMap<Key, SendMode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendCategoryOld {
+    name: String,
+    pub use_general: bool,
+    pub networks: Vec<u64>,
+    pub groups: HashMap<Key, SendMode>,
+}
+
+impl From<SendCategoryOld> for SendCategory {
+    fn from(value: SendCategoryOld) -> Self {
+        Self {
+            name: value.name,
+            use_general: value.use_general,
+            parameters: Parameters::Networks(value.networks),
+            groups: value.groups,
+        }
+    }
 }
 
 impl SendCategory {

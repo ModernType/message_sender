@@ -4153,6 +4153,7 @@ dependencies = [
  "rfd",
  "ron",
  "serde",
+ "serde-versioning",
  "serde_json",
  "simplelog",
  "tokio",
@@ -6451,6 +6452,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "serde-versioning"
+version = "1.0.228-fix.1"
+source = "git+https://github.com/vic1707/serde-versioning.git#95c5ee1a4b98cafe4eabaf8adabe5b60490314f9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

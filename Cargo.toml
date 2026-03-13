@@ -13,7 +13,6 @@ simplelog = "0.12.2"
 presage = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
 presage-store-sqlite = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
 log = "0.4.28"
-serde = {version = "1.0.228", features = ["derive"]}
 anyhow = "1.0.100"
 axum = "0.8.7"
 derive_more = { version = "2.1.1", features = ["display", "from"] }
@@ -29,6 +28,8 @@ wacore-binary = {git = "https://github.com/jlucaso1/whatsapp-rust.git"}
 rfd = "0.17.1"
 tracing-subscriber = "0.3.22"
 tracing = "0.1.44"
+serde-versioning = { git = "https://github.com/vic1707/serde-versioning.git" }
+serde = "1.0.228"
 
 [dependencies.iced]
 version = "0.14"
