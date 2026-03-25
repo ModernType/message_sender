@@ -1,8 +1,9 @@
 use std::{
-    collections::{HashMap, HashSet}, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::SocketAddrV4, path::Path, sync::Arc, time::{Duration, Instant}
+    collections::{HashMap, HashSet}, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::{IpAddr, Ipv4Addr, SocketAddrV4}, path::Path, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, container, text}};
+use local_ip_address::local_ip;
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -535,7 +536,13 @@ impl Default for AppData {
     fn default() -> Self {
         Self {
             groups: HashMap::new(),
-            recieve_address: "127.0.0.1:8000".parse().unwrap(),
+            recieve_address: SocketAddrV4::new(
+                match local_ip() {
+                    Ok(IpAddr::V4(ip)) => ip,
+                    _ => Ipv4Addr::new(127, 0, 0, 1),
+                },
+                8000
+            ),
             autosend: false,
             sync_interval: 10,
             send_timeout: 90,
