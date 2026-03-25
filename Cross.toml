@@ -1,0 +1,11 @@
+[target.x86_64-unknown-linux-musl]
+image = "my-custom-cross:latest"
+docker_platform = "linux/amd64"
+
+[build.env]
+passthrough = [
+    "PROTOC",
+    "PROTOC_INCLUDE",
+    "BORING_BSSL_PATH",
+    "BORING_BSSL_PATH_INCLUDE",
+]

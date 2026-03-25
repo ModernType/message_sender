@@ -72,7 +72,7 @@ strip = "none"
 lto = false
 codegen-units = 256
 incremental = true
-codegen-backend = "cranelift"
+# codegen-backend = "cranelift"
 
 [profile.release]
 opt-level = "z"
