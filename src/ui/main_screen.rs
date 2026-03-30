@@ -26,6 +26,7 @@ pub enum Message {
     NextMessage,
     Cancel(usize),
     RefreshMessage(usize),
+    Expand(usize),
     SendMessageDirect(Arc<SendMessageInfo>),
 }
 
@@ -73,6 +74,10 @@ impl MainScreen {
                 let message = &self.message_history[idx];
                 return Task::done(super::Message::CancelMessage(message.clone()));
             },
+            Message::Expand(idx) => {
+                let message = &self.message_history[idx];
+                message.toggle_expanded();
+            }
             Message::RefreshMessage(idx) => {
                 let message = &self.message_history[idx];
                 message.set_status(super::message_history::SendStatus::Sending, std::sync::atomic::Ordering::Relaxed);
@@ -306,7 +311,7 @@ impl MainScreen {
         }
     }
 
-    fn message_history(&self) -> Element<'_, Message> {
+    fn message_history<'a>(&'a self, data: &'a AppData) -> Element<'a, Message> {
         scrollable(
             self.message_history.iter().enumerate().fold(
                 Column::new()
@@ -316,7 +321,7 @@ impl MainScreen {
                 .height(Length::Fill),
                 |col, (idx, message_info)| {
                     col.push(
-                        message_info.view(idx)
+                        message_info.view(idx, &data)
                     )
                 }
             )
@@ -549,7 +554,7 @@ impl MainScreen {
         .into()
     }
 
-    pub fn view<'a>(&'a self, tutorial: bool) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, tutorial: bool, data: &'a AppData) -> Element<'a, Message> {
         Row::new()
         .spacing(7)
         .push(
@@ -557,7 +562,7 @@ impl MainScreen {
                 self.tutorial()
             }
             else {
-                self.message_history()
+                self.message_history(data)
             }
         )
         .push_maybe(

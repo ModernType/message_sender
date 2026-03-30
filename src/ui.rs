@@ -440,7 +440,7 @@ impl App {
             )
             .push(
                 match self.cur_screen {
-                    Screen::Main => self.main_scr.view(self.is_tutorial()).map(Into::into),
+                    Screen::Main => self.main_scr.view(self.is_tutorial(), &self.data).map(Into::into),
                     Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
                     Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
                 }

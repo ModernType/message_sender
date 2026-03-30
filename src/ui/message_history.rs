@@ -1,11 +1,11 @@
 use std::{sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering}}, time::Duration};
 
 use futures::channel::mpsc::UnboundedSender;
-use iced::{Alignment, Border, Color, Element, Length, Shadow, Theme, Vector, widget::{Column, Row, button, container, progress_bar, text, tooltip}};
+use iced::{Alignment, Border, Color, Element, Length, Shadow, Theme, Vector, widget::{Column, Row, button, container, mouse_area, progress_bar, space, text, tooltip}};
 use serde::{Deserialize, Serialize};
 use wacore_binary::jid::Jid;
 
-use crate::{icon, message::SendMode, messangers::Key};
+use crate::{appdata::AppData, icon, message::SendMode, messangers::Key, ui::ext::PushMaybe};
 
 const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
 
@@ -19,6 +19,7 @@ pub struct SendMessageInfo {
     pub groups_signal: Vec<GroupInfoSignal>,
     pub groups_whatsapp: Vec<GroupInfoWhatsapp>,
     cancel_handle: Mutex<Option<tokio::task::AbortHandle>>,
+    expanded: AtomicBool,
 }
 
 #[repr(u8)]
@@ -145,6 +146,7 @@ impl SendMessageInfo {
             groups_signal: Vec::new(),
             groups_whatsapp: Vec::new(),
             cancel_handle: Mutex::new(None),
+            expanded: AtomicBool::new(false),
         }
     }
 
@@ -205,7 +207,12 @@ impl SendMessageInfo {
         }
     }
 
-    pub fn view<'a>(self: &'a Arc<Self>, idx: usize) -> Element<'a, super::main_screen::Message, Theme> {
+    pub fn toggle_expanded(&self) {
+        let current = self.expanded.load(Ordering::Relaxed);
+        self.expanded.store(!current, Ordering::Relaxed);
+    }
+
+    pub fn view<'a>(self: &'a Arc<Self>, idx: usize, data: &'a AppData) -> Element<'a, super::main_screen::Message, Theme> {
         let status_color = match self.status.load(Ordering::Relaxed) {
             0 => Some(iced::Color::from_rgb(0.3, 0.3, 0.3)),
             1 => None,
@@ -215,163 +222,217 @@ impl SendMessageInfo {
         };
         let sent_count = self.sent_count();
         let status = SendStatus::from(self.status.load(Ordering::Relaxed));
-        container(
-            Row::new()
-            .spacing(5)
-            .padding(5)
-            .align_y(Alignment::Center)
-            .push(
-                Column::new()
-                .spacing(5)
-                .padding(5)
-                .push(
-                    text(
-                        self.content.lines()
-                        .filter(|l| l.len() > 1)
-                        .take(3)
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                    )
-                    .center()
-                    .wrapping(text::Wrapping::None)
-                    .size(14)
-                    .width(Length::Fill)
-                )
-                .push(
-                    match status {
-                        SendStatus::Pending => Element::from(
-                            text("Pending...")
-                            .color(status_color.unwrap())
-                            .font(iced::Font { style: iced::font::Style::Italic, ..Default::default() })
-                            .center()
-                            .width(Length::Fill)
-                        ),
-                        SendStatus::Deleted if sent_count == 0 => Element::from(
-                            text("Видалено")
-                            .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().danger.base.color) })
-                            .center()
-                            .width(Length::Fill)
-                        ),
-                        SendStatus::Sent if sent_count == self.len() => Element::from(
-                            text("Відправлено")
-                            .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) })
-                            .center()
-                            .width(Length::Fill)
-                        ),
-                        _ => Element::from(
-                            Column::new()
-                            .push(
-                                text(format!("{}/{}", sent_count, self.groups_signal.len() + self.groups_whatsapp.len()))
-                                .color_maybe(status_color)
-                                .center()
-                                .width(Length::Fill)
-                            )
-                            .push(
-                                progress_bar(0.0 ..= (self.groups_signal.len() + self.groups_whatsapp.len()) as f32, sent_count as f32)
-                                .length(Length::Fill)
-                                .girth(5)
-                                .style(move |theme: &Theme| {
-                                    let palette = theme.extended_palette();
-                                    progress_bar::Style {
-                                        bar: status_color.map(iced::Background::Color).unwrap_or_else(|| palette.background.base.text.into()),
-                                        background: palette.background.base.color.into(),
-                                        border: Border::default().rounded(2.5),
-                                    }
-                                })
-                            )
-                        )
-                    }
-                )
+        let expanded = self.expanded.load(Ordering::Relaxed);
+        let content = if expanded {
+            text(&self.content)
+            .width(Length::Fill)
+        }
+        else {
+            text(
+                self.content.lines()
+                .filter(|l| l.len() > 1)
+                .take(3)
+                .collect::<Vec<_>>()
+                .join("\n")
             )
-            .push(
+            .center()
+            .wrapping(text::Wrapping::None)
+            .size(14)
+            .width(Length::Fill)
+        };
+
+        mouse_area(
+            container(
                 Row::new()
                 .spacing(5)
+                .padding(5)
+                .align_y(Alignment::Center)
                 .push(
-                    tooltip(
-                        button(
-                            match status {
-                                SendStatus::Sent => icon!(edit),
-                                _ => icon!(refresh),
-                            }
-                            .size(28)
-                        )
-                        .style(button::text)
-                        .on_press_maybe(match status {
-                            SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
-                            SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
-                            SendStatus::Deleted => Some(super::main_screen::Message::SendMessageDirect(self.clone())),
-                            _ => None,
-                        }),
-                        match status {
-                            SendStatus::Sent => "Редагувати",
-                            SendStatus::Deleted => "Відправити знову",
-                            _ => "Повторити",
-                        },
-                        tooltip::Position::FollowCursor
+                    Column::new()
+                    .spacing(5)
+                    .padding(5)
+                    .push(
+                        content
                     )
-                    .delay(TOOLTIP_DELAY)
-                    .snap_within_viewport(true)
-                    .style(|theme| container::Style {
-                        background: Some(theme.extended_palette().background.weaker.color.into()),
-                        text_color: Some(theme.extended_palette().background.weaker.text.into()),
-                        border: Border::default().rounded(5),
-                        shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::ZERO, blur_radius: 2.0 },
-                        ..Default::default()
-                    })
+                    .push_maybe(expanded.then(|| space().height(20)))
+                    .push(
+                        match status {
+                            SendStatus::Pending => Element::from(
+                                text("Очікування...")
+                                .color(status_color.unwrap())
+                                .font(iced::Font { style: iced::font::Style::Italic, ..Default::default() })
+                                .center()
+                                .width(Length::Fill)
+                            ),
+                            SendStatus::Deleted if sent_count == 0 => Element::from(
+                                text("Видалено")
+                                .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().danger.base.color) })
+                                .center()
+                                .width(Length::Fill)
+                            ),
+                            SendStatus::Sent if sent_count == self.len() => Element::from(
+                                text("Відправлено")
+                                .style(|theme: &Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) })
+                                .center()
+                                .width(Length::Fill)
+                            ),
+                            _ => Element::from(
+                                Column::new()
+                                .push(
+                                    text(format!("Надсилаєтсья у групу {}/{}", sent_count, self.groups_signal.len() + self.groups_whatsapp.len()))
+                                    .color_maybe(status_color)
+                                    .center()
+                                    .width(Length::Fill)
+                                )
+                                .push(
+                                    progress_bar(0.0 ..= (self.groups_signal.len() + self.groups_whatsapp.len()) as f32, sent_count as f32)
+                                    .length(Length::Fill)
+                                    .girth(
+                                        match expanded {
+                                            true => 8,
+                                            false => 5,
+                                        }
+                                    )
+                                    .style(move |theme: &Theme| {
+                                        let palette = theme.extended_palette();
+                                        progress_bar::Style {
+                                            bar: status_color.map(iced::Background::Color).unwrap_or_else(|| palette.background.base.text.into()),
+                                            background: palette.background.base.color.into(),
+                                            border: Border::default().rounded(2.5),
+                                        }
+                                    })
+                                )
+                            )
+                        }
+                    )
+                    .push_maybe((expanded && (status == SendStatus::Sending || status == SendStatus::Failed)).then(|| {
+                        let wa = self.groups_whatsapp
+                            .iter()
+                            .map(|group| (
+                                data.groups.get(&Key::Whatsapp(group.key.clone()))
+                                    .map(|group| group.title.as_str())
+                                    .unwrap_or("Видалено"),
+                                group.sent(Ordering::Relaxed)
+                            ));
+                        let sig = self.groups_signal
+                            .iter()
+                            .map(|group| (
+                                data.groups.get(&Key::Signal(group.key.clone()))
+                                    .map(|group| group.title.as_str())
+                                    .unwrap_or("Видалено"),
+                                group.sent(Ordering::Relaxed)
+                            ));
+                        
+                        let mut data = wa.chain(sig).collect::<Vec<_>>();
+                        data.sort_by(|(s1, _), (s2, _)| s1.cmp(s2));
+
+                        Column::from_iter(
+                            data.into_iter()
+                            .map(|(name, sent)| {
+                                match sent {
+                                    true => text(format!("{name}: Надіслано")).center().style(|theme: &iced::Theme| text::Style { color: Some(theme.extended_palette().success.strong.color) }),
+                                    false => text(format!("{name}: Надсилається")).center().style(|theme: &iced::Theme| text::Style { color: Some(theme.extended_palette().secondary.weak.text) }),
+                                }
+                                .into()
+                            })
+                        )
+                        .spacing(2)
+                        .align_x(Alignment::Center)
+                        .width(Length::Fill)
+                    }))
                 )
                 .push(
-                    tooltip(
-                        button(
-                            icon!(delete)
-                            .size(28)
-                        )
-                        .style(|theme: &Theme, status| button::Style {
-                            text_color: match status {
-                                button::Status::Active => theme.extended_palette().danger.base.color,
-                                _ => theme.extended_palette().danger.weak.color,
+                    Row::new()
+                    .spacing(5)
+                    .push(
+                        tooltip(
+                            button(
+                                match status {
+                                    SendStatus::Sent => icon!(edit),
+                                    _ => icon!(refresh),
+                                }
+                                .size(28)
+                            )
+                            .style(button::text)
+                            .on_press_maybe(match status {
+                                SendStatus::Sent => Some(super::main_screen::Message::EditMessage(idx)),
+                                SendStatus::Sending | SendStatus::Failed => Some(super::main_screen::Message::RefreshMessage(idx)),
+                                SendStatus::Deleted => Some(super::main_screen::Message::SendMessageDirect(self.clone())),
+                                _ => None,
+                            }),
+                            match status {
+                                SendStatus::Sent => "Редагувати",
+                                SendStatus::Deleted => "Відправити знову",
+                                _ => "Повторити",
                             },
-                            ..button::text(theme, status)
+                            tooltip::Position::FollowCursor
+                        )
+                        .delay(TOOLTIP_DELAY)
+                        .snap_within_viewport(true)
+                        .style(|theme| container::Style {
+                            background: Some(theme.extended_palette().background.weaker.color.into()),
+                            text_color: Some(theme.extended_palette().background.weaker.text.into()),
+                            border: Border::default().rounded(5),
+                            shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::ZERO, blur_radius: 2.0 },
+                            ..Default::default()
                         })
-                        .on_press_maybe(match status {
-                            SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
-                            SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
-                            _ => None,
-                        }),
-                        match status {
-                            SendStatus::Sent => "Видалити",
-                            _ => "Відмінити",
-                        },
-                        tooltip::Position::FollowCursor
                     )
-                    .delay(TOOLTIP_DELAY)
-                    .snap_within_viewport(true)
-                    .style(|theme| container::Style {
-                        background: Some(theme.extended_palette().background.weaker.color.into()),
-                        text_color: Some(theme.extended_palette().background.weaker.text.into()),
-                        border: Border::default().rounded(5),
-                        shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::ZERO, blur_radius: 3.0 },
-                        ..Default::default()
-                    })
+                    .push(
+                        tooltip(
+                            button(
+                                icon!(delete)
+                                .size(28)
+                            )
+                            .style(|theme: &Theme, status| button::Style {
+                                text_color: match status {
+                                    button::Status::Active => theme.extended_palette().danger.base.color,
+                                    _ => theme.extended_palette().danger.weak.color,
+                                },
+                                ..button::text(theme, status)
+                            })
+                            .on_press_maybe(match status {
+                                SendStatus::Sent => Some(super::main_screen::Message::DeleteMessage(idx)),
+                                SendStatus::Sending | SendStatus::Failed  => Some(super::main_screen::Message::Cancel(idx)),
+                                _ => None,
+                            }),
+                            match status {
+                                SendStatus::Sent => "Видалити",
+                                _ => "Відмінити",
+                            },
+                            tooltip::Position::FollowCursor
+                        )
+                        .delay(TOOLTIP_DELAY)
+                        .snap_within_viewport(true)
+                        .style(|theme| container::Style {
+                            background: Some(theme.extended_palette().background.weaker.color.into()),
+                            text_color: Some(theme.extended_palette().background.weaker.text.into()),
+                            border: Border::default().rounded(5),
+                            shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::ZERO, blur_radius: 3.0 },
+                            ..Default::default()
+                        })
+                    )
                 )
             )
+            .padding(3)
+            .width(Length::Fill)
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                let background = match status {
+                    SendStatus::Deleted | SendStatus::Failed => palette.danger.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
+                    SendStatus::Sending => palette.background.weak.color,
+                    SendStatus::Sent => palette.success.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
+                    SendStatus::Pending => palette.background.weakest.color,
+                };
+                container::Style {
+                    background: Some(background.into()),
+                    border: Border::default().rounded(20),
+                    shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::new(0.0, 2.0), blur_radius: 4.0 },
+                    ..Default::default()
+                }
+            })
         )
-        .padding(3)
-        .width(Length::Fill)
-        .style(move |theme: &Theme| {
-            let palette = theme.extended_palette();
-            let background = match status {
-                SendStatus::Deleted | SendStatus::Failed => palette.danger.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
-                SendStatus::Sending => palette.background.weak.color,
-                SendStatus::Sent => palette.success.base.color.scale_alpha(if palette.is_dark { 0.10 } else { 0.4 }),
-                SendStatus::Pending => palette.background.weakest.color,
-            };
-            container::Style {
-                background: Some(background.into()),
-                border: Border::default().rounded(20),
-                shadow: Shadow { color: Color::BLACK.scale_alpha(0.2), offset: Vector::new(0.0, 2.0), blur_radius: 4.0 },
-                ..Default::default()
-            }
-        })
+        .on_release(super::main_screen::Message::Expand(idx))
+        .interaction(iced::mouse::Interaction::Pointer)
         .into()
     }
 }
@@ -416,6 +477,7 @@ impl From<SaveMessageInfo> for SendMessageInfo {
             groups_signal,
             groups_whatsapp,
             cancel_handle: Mutex::new(None),
+            expanded: AtomicBool::new(false),
         }
     }
 }
