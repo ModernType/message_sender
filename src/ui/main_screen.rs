@@ -213,10 +213,21 @@ impl MainScreen {
                 return Task::done(MainMessage::SendMessage(message))
             },
             Message::SetGroups(groups) => {
-                for (key, title) in groups {
-                    data.groups.entry(key)
-                    .or_insert(Group { title, send_mode: SendMode::Off });
-                }
+                let mut replace_map = groups
+                    .into_iter()
+                    .map(|(key, title)| {
+                        let group = Group { title, send_mode: data.groups.get(&key).map(|g| g.send_mode).unwrap_or(SendMode::Off) };
+                        (key, group)
+                    })
+                    .collect::<HashMap<_, _>>();
+                
+                replace_map.extend(
+                    std::mem::take(&mut data.groups)
+                    .into_iter()
+                    .filter(|(key, _)| matches!(key, Key::Signal(_)))
+                );
+
+                data.groups = replace_map;
             },
             Message::UpdateMessageHistory => {
                 // Makes window redraw to display actual information

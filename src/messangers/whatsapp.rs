@@ -1,8 +1,8 @@
 use std::sync::{Arc, OnceLock};
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use whatsapp_rust::{Client, bot::Bot, store::SqliteStore, transport::{TokioWebSocketTransportFactory, UreqHttpClient}, types::events::Event};
-use waproto::whatsapp as wa;
+use whatsapp_rust::{Client, bot::Bot, store::SqliteStore, transport::{TokioWebSocketTransportFactory, UreqHttpClient}, types::events::{Event, PinUpdate}};
+use waproto::whatsapp::{self as wa, sync_action_value::PinAction};
 
 use crate::{message::{SendMode, parse_message_with_whatsapp_format}, messangers::Key, ui::{self, side_menu::LinkState, message_history::{SendMessageInfo, SendStatus}}};
 
@@ -20,6 +20,7 @@ pub async fn start_whatsapp_task() {
         Err(e) => {
             UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Unlinked).into()).await.unwrap();
             UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::Notification(format!("Error linking to Whatsapp: {e}"))).await.unwrap();
+            _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::UpdateGroupList).await;
         },
     }
 }
@@ -58,7 +59,13 @@ async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<(
             },
             Event::GroupInfoUpdate { .. } => {
                 _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::UpdateGroupList).await;
-            }
+            },
+            Event::Notification(_) => {
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::UpdateGroupList).await;
+            },
+            Event::PinUpdate(PinUpdate { action, .. }) if PinAction { pinned: Some(false) } == *action => {
+                _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::Message::UpdateGroupList).await;
+            },
             other_event => log::info!("Whatsapp event: {other_event:?}"),
         }
     })
