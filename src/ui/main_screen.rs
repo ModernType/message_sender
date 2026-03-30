@@ -171,12 +171,16 @@ impl MainScreen {
                     }
                 }
 
-                
                 if use_general || groups.is_empty() {
                     log::info!("Getting general");
                     for (key, group) in data.groups.iter() {
                         if group.active() {
-                            message.push(key.clone(), group.send_mode);
+                            if let Some(v) = groups.get_mut(key) {
+                                v.update(group.send_mode);
+                            }
+                            else {
+                                groups.insert(key, group.send_mode);
+                            }
                         }
                     }
                 }
