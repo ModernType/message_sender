@@ -1,13 +1,9 @@
 use std::{
-    collections::{HashMap, HashSet}, fmt::Debug, fs::{File, OpenOptions}, io::Write, net::{IpAddr, Ipv4Addr, SocketAddrV4}, path::Path, sync::Arc, time::{Duration, Instant}
+    collections::HashMap, fmt::Debug, sync::Arc, time::{Duration, Instant}
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, container, text}};
-use local_ip_address::local_ip;
-use ron::ser::PrettyConfig;
-use serde::{Serialize, Deserialize};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crate::{message_server::{self, AcceptedMessage}, messangers::{Key, whatsapp}, send_categories::{NetworkInfo, NetworksPool, Parameters, SendCategory}, ui::{category_screen::CategoryScreen, message_history::{SaveMessageInfo, SendStatus}, side_menu::{LinkState, SideMenu}, theme::Theme}};
+use crate::{appdata::AppData, message_server::{self, AcceptedMessage}, messangers::whatsapp, send_categories::{NetworkInfo, Parameters}, ui::{category_screen::CategoryScreen, message_history::{SaveMessageInfo, SendStatus}, side_menu::{LinkState, SideMenu}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -18,7 +14,7 @@ pub mod category_screen;
 pub mod side_menu;
 pub mod icons;
 mod ext;
-mod theme;
+pub mod theme;
 
 const NOTIFICATION_SHOW_TIME: u64 = 6000;
 
@@ -506,109 +502,6 @@ impl App {
 
     pub fn theme(&self) -> iced::Theme {
         self.data.theme.as_theme().clone()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(default)]
-pub struct AppData {
-    pub groups: HashMap<Key, main_screen::Group>,
-    pub recieve_address: SocketAddrV4,
-    pub autosend: bool,
-    pub sync_interval: u64,
-    pub send_timeout: u64,
-    pub markdown: bool,
-    pub history_len: u32,
-    pub signal_logged: bool,
-    pub whatsapp_logged: bool,
-    pub theme: Theme,
-    pub categories: Vec<SendCategory>,
-    pub networks: NetworksPool,
-    pub sources: HashSet<String>,
-    pub comments: HashSet<String>,
-    pub show_groups: bool,
-    pub autoupdate_groups: bool,
-    pub message_file: bool,
-    pub saved_messages: Vec<SaveMessageInfo>,
-}
-
-impl Default for AppData {
-    fn default() -> Self {
-        Self {
-            groups: HashMap::new(),
-            recieve_address: SocketAddrV4::new(
-                match local_ip() {
-                    Ok(IpAddr::V4(ip)) => ip,
-                    _ => Ipv4Addr::new(127, 0, 0, 1),
-                },
-                8000
-            ),
-            autosend: false,
-            sync_interval: 10,
-            send_timeout: 90,
-            markdown: true,
-            history_len: 50,
-            signal_logged: false,
-            whatsapp_logged: false,
-            theme: Theme::None,
-            categories: Vec::new(),
-            networks: HashMap::new(),
-            sources: HashSet::new(),
-            comments: HashSet::new(),
-            show_groups: true,
-            autoupdate_groups: true,
-            message_file: false,
-            saved_messages: Vec::new()
-        }
-    }
-}
-
-impl AppData {
-    pub fn load() -> anyhow::Result<Self> {
-        let data = File::open("data.ron")?;
-        let state = ron::de::from_reader(data)?;
-        Ok(state)
-    }
-
-    pub async fn load_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let mut file = tokio::fs::File::open(path).await?;
-        let mut content = String::new();
-        file.read_to_string(&mut content).await?;
-        Ok(ron::de::from_str(&content)?)
-    }
-
-    pub async fn save_to(&self, path: impl AsRef<Path>) -> std::io::Result<()> {
-        let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(path)
-            .await?;
-        let s = ron::ser::to_string_pretty(
-            self,
-            PrettyConfig::default(),
-        ).unwrap();
-
-        file.write_all(s.as_bytes()).await?;
-        Ok(())
-    }
-
-    pub fn new() -> Self {
-        Self::load().unwrap_or_default()
-    }
-
-    pub fn save(&self) -> anyhow::Result<()> {
-        let mut config_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("data.ron")?;
-        let s = ron::ser::to_string_pretty(
-            self,
-            PrettyConfig::default(),
-        )?;
-        config_file.write_all(s.as_bytes())?;
-        Ok(())
     }
 }
 

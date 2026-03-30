@@ -2,10 +2,11 @@ use derive_more::Display;
 use iced::theme::{Base, Mode, palette::Extended};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Display, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, PartialEq, Default)]
 #[serde(into = "String", from = "&str")]
 pub enum Theme {
     #[display("System")]
+    #[default]
     None,
     System,
     #[display("System")]

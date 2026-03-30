@@ -1,7 +1,7 @@
 cargo-features = ["codegen-backend"]
 [package]
 name = "modern-sender"
-version = "1.0.0"
+version = "1.0.1-dev"
 edition = "2024"
 license = "GPLv3"
 exclude = ["sqlite-storage"]
@@ -9,7 +9,6 @@ exclude = ["sqlite-storage"]
 [dependencies]
 futures = "0.3.31"
 image = "0.25.8"
-simplelog = "0.12.2"
 presage = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
 presage-store-sqlite = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
 log = "0.4.28"
@@ -31,6 +30,7 @@ tracing = "0.1.44"
 serde-versioning = { git = "https://github.com/vic1707/serde-versioning.git" }
 serde = "1.0.228"
 local-ip-address = "0.6.10"
+better_default = "1.0.5"
 
 [dependencies.iced]
 version = "0.14"
