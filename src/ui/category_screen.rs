@@ -32,6 +32,7 @@ pub enum Message {
     AddCategory,
     EditNewName(String),
     CategoryToggled(usize),
+    CategoryVisibility(usize),
     CategoryDelete(usize),
     ToggleGroup(usize, Key, SendMode),
     ToggleNetwork(usize, u64, bool),
@@ -86,6 +87,10 @@ impl CategoryScreen {
                 if let Some(name) = self.new_category_name.as_mut() {
                     *name = new_name;
                 }
+            },
+            Message::CategoryVisibility(index) => {
+                let category = &mut data.categories[index];
+                category.active = !category.active;
             },
             Message::CategoryToggled(index) => {
                 if let Some(cur_index) = self.selected_category && cur_index == index {
@@ -253,6 +258,30 @@ impl CategoryScreen {
                                     text(category.name())
                                     .width(Length::Fill)
                                     .center()
+                                )
+                                .push(
+                                    tooltip(
+                                        button(
+                                            match category.active {
+                                                true => icon!(visibility),
+                                                false => icon!(visibility_off),
+                                            }
+                                            .size(28)
+                                        )
+                                        .style(|theme: &iced::Theme, status| button::Style {
+                                            text_color: match status {
+                                                button::Status::Active => theme.extended_palette().secondary.strong.color.into(),
+                                                _ => theme.extended_palette().secondary.weak.color.into(),
+                                            },
+                                            ..button::text(theme, status)
+                                        })
+                                        .padding(0)
+                                        .on_press(Message::CategoryVisibility(index)), 
+                                        match category.active {
+                                            true => "Канал активний",
+                                            false => "Канал вимкнений",
+                                        }
+                                    )
                                 )
                                 .push(
                                     tooltip(

@@ -131,7 +131,7 @@ impl MainScreen {
                 if let Some(network) = network {
                     log::info!("Has network {}", &network);
 
-                    for category in data.categories.iter() {
+                    for category in data.categories.iter().filter(|c| c.active) {
                         if category.contains_network(&network) {
                             for (key, mode) in category.groups.iter() {
                                 groups.entry(key)
@@ -145,7 +145,7 @@ impl MainScreen {
                 if let Some(source) = source {
                     log::info!("Has source {}", &source);
 
-                    for category in data.categories.iter() {
+                    for category in data.categories.iter().filter(|c| c.active) {
                         if category.contains_source(&source) {
                             for (key, mode) in category.groups.iter() {
                                 groups.entry(key)
@@ -159,7 +159,7 @@ impl MainScreen {
                 if let Some(comment) = comment {
                     log::info!("Has comment {}", &comment);
 
-                    for category in data.categories.iter() {
+                    for category in data.categories.iter().filter(|c| c.active) {
                         if category.contains_comment(&comment) {
                             for (key, mode) in category.groups.iter() {
                                 groups.entry(key)

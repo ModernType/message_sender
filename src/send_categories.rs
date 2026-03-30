@@ -9,10 +9,14 @@ use crate::{message::SendMode, messangers::Key};
 
 pub type NetworksPool = HashMap<u64, NetworkInfo>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[versioning(optimistic, previous_version = "SendCategoryOld")]
+#[derive(Debug, Clone, Serialize, Deserialize, better_default::Default)]
+#[versioning(previous_version = "SendCategoryOld")]
+#[serde(default)]
 pub struct SendCategory {
     name: String,
+    #[default(true)]
+    pub active: bool,
+    #[default(true)]
     pub use_general: bool,
     pub parameters: Parameters,
     pub groups: HashMap<Key, SendMode>,
@@ -33,6 +37,7 @@ impl From<SendCategoryOld> for SendCategory {
             use_general: value.use_general,
             parameters: Parameters::Networks(value.networks),
             groups: value.groups,
+            active: true,
         }
     }
 }
@@ -41,9 +46,7 @@ impl SendCategory {
     pub fn new(name: String) -> Self {
         Self {
             name,
-            use_general: true,
-            parameters: Parameters::Networks(Vec::new()),
-            groups: HashMap::new(),
+            ..Default::default()
         }
     }
 
@@ -79,8 +82,9 @@ impl SendCategory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, better_default::Default)]
 pub enum Parameters {
+    #[default]
     Networks(Vec<u64>),
     Sources(HashSet<String>),
     Comments(HashSet<String>),
