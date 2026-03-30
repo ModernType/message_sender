@@ -47,6 +47,7 @@ pub struct AppData {
     #[default(true)]
     pub markdown: bool,
     /// Length of message history
+    #[default(50)]
     pub history_len: u32,
     /// Has user logged to signal
     pub signal_logged: bool,
@@ -63,6 +64,7 @@ pub struct AppData {
     /// Set of comments saved from sent messages
     pub comments: HashSet<String>,
     /// Whether to update groups automatically (should be deprecated in favor of automatic update)
+    #[default(true)]
     pub autoupdate_groups: bool,
     /// Whether to show "Message from file" button
     pub message_file: bool,
