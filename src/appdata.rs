@@ -63,9 +63,6 @@ pub struct AppData {
     pub sources: HashSet<String>,
     /// Set of comments saved from sent messages
     pub comments: HashSet<String>,
-    /// Whether to update groups automatically (should be deprecated in favor of automatic update)
-    #[default(true)]
-    pub autoupdate_groups: bool,
     /// Whether to show "Message from file" button
     pub message_file: bool,
     /// Not sent messages saved after close up
@@ -87,7 +84,6 @@ impl From<AppData1> for AppData {
             networks: value.networks,
             sources: value.sources,
             comments: value.comments,
-            autoupdate_groups: value.autoupdate_groups,
             message_file: value.message_file,
             saved_messages: value.saved_messages
         }

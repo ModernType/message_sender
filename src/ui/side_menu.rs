@@ -2,7 +2,7 @@ use std::time::Instant;
 use derive_more::Display;
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, mouse_area, opaque, space, svg, text, tooltip}};
 
-use crate::{icon, message::OperatorMessage, message_server::AcceptedMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{GROUP_REFRESH_ICON, SIGNAL_ICON, WHATSAPP_ICON}}};
+use crate::{icon, message::OperatorMessage, message_server::AcceptedMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
 
 use super::Message as MainMessage;
 
@@ -193,23 +193,6 @@ impl SideMenu {
                         text(format!("Whatsapp: {}", self.whatsapp_state))
                     )
                 )
-                .push_maybe(
-                    (!data.autoupdate_groups).then(|| sidebar_tooltip(
-                        button(
-                            svg(svg::Handle::from_memory(GROUP_REFRESH_ICON))
-                            .style(move |theme: &iced::Theme, _status| svg::Style {
-                                color: Some(theme.extended_palette().background.weaker.text),
-                            })
-                            .height(30)
-                            .width(Length::Shrink)
-                        )
-                        .on_press(Message::UpdateGroups)
-                        .style(button::subtle)
-                        .height(Length::Shrink)
-                        .padding(Padding::default().vertical(BUTTON_PADDING).horizontal(5)),
-                        "Оновити групи"
-                    ))
-                )
                 .push(
                     iced::widget::rule::horizontal(3)
                     .style(|theme: &iced::Theme| iced::widget::rule::Style { 
@@ -354,21 +337,6 @@ impl SideMenu {
                 (self.whatsapp_state == LinkState::Unlinked).then_some(Message::LinkWhatsapp),
                 false
             )
-        )
-        .push_maybe(
-            (!data.autoupdate_groups).then(|| menu_button(
-                svg(svg::Handle::from_memory(GROUP_REFRESH_ICON))
-                    .style(move |theme: &iced::Theme, _status| svg::Style {
-                        color: Some(theme.extended_palette().background.weaker.text),
-                    })
-                    .width(30)
-                    .height(30), 
-                text("Оновити групи")
-                    .height(Length::Fill)
-                    .align_y(Alignment::Center), 
-                Some(Message::UpdateGroups),
-                false
-            ))
         )
         .push(
             iced::widget::rule::horizontal(3)

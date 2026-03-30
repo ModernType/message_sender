@@ -9,7 +9,6 @@ use super::Message as MainMessage;
 #[derive(Debug, Clone)]
 pub enum Message {
     ToggleMarkdown(bool),
-    ToggleAutoupdateGroups(bool),
     ToggleMessageFile(bool),
     ToggleAutoSend(bool),
     RecieveAddressEditChanged(String),
@@ -52,9 +51,6 @@ impl SettingsScreen {
         match message {
             Message::ToggleMarkdown(markdown) => {
                 data.markdown = markdown;
-            },
-            Message::ToggleAutoupdateGroups(state) => {
-                data.autoupdate_groups = state;
             },
             Message::ToggleMessageFile(state) => {
                 data.message_file = state;
@@ -303,11 +299,6 @@ impl SettingsScreen {
                                 checkbox(data.message_file)
                                 .label("Показувати функцію відправки повідомлення з файлу")
                                 .on_toggle(Message::ToggleMessageFile)
-                            )
-                            .push(
-                                checkbox(data.autoupdate_groups)
-                                .label("Автоматично оновлювати список груп з месенджерів")
-                                .on_toggle(Message::ToggleAutoupdateGroups)
                             )
                             .push(
                                 checkbox(data.markdown)
