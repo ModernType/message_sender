@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use derive_more::Display;
 use iced::border::Radius;
 use iced::{Alignment, Border, Color, Length, Padding, Shadow, Vector};
 use iced::{Element, Task};
-use iced::widget::{Column, Row, button, checkbox, container, mouse_area, pick_list, scrollable, space, text, text_input};
+use iced::widget::{Column, Row, button, checkbox, container, mouse_area, pick_list, scrollable, space, text, text_input, tooltip as tooltip_widget};
 
 use crate::icon;
 use crate::message::SendMode;
@@ -254,20 +255,22 @@ impl CategoryScreen {
                                     .center()
                                 )
                                 .push(
-                                    button(
-                                        // svg(svg::Handle::from_memory(icons::DELETE))
-                                        icon!(delete)
-                                        .size(28)
+                                    tooltip(
+                                        button(
+                                            icon!(delete)
+                                            .size(28)
+                                        )
+                                        .style(|theme: &iced::Theme, status| button::Style {
+                                            text_color: match status {
+                                                button::Status::Active => theme.extended_palette().danger.base.color.into(),
+                                                _ => theme.extended_palette().danger.weak.color.into(),
+                                            },
+                                            ..button::text(theme, status)
+                                        })
+                                        .padding(0)
+                                        .on_press(Message::CategoryDelete(index)), 
+                                        "Видалити"
                                     )
-                                    .style(|theme: &iced::Theme, status| button::Style {
-                                        text_color: match status {
-                                            button::Status::Active => theme.extended_palette().danger.base.color.into(),
-                                            _ => theme.extended_palette().danger.weak.color.into(),
-                                        },
-                                        ..button::text(theme, status)
-                                    })
-                                    .padding(0)
-                                    .on_press(Message::CategoryDelete(index))
                                 )
                             )
                             .style(
@@ -337,30 +340,41 @@ impl CategoryScreen {
                     .width(Length::Fill)
                 )
                 .push(
-                    button(
-                        icon!(graphic_eq)
-                        .size(22)
-                    )
-                    .padding(Padding::default().horizontal(3))
-                    .style(
-                        match group.send_mode {
-                            SendMode::Frequency => Box::new(button_style(true)),
-                            _ => Box::new(button::text) as Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>,
-                        }
-                    )
-                    .on_press(Message::ToggleGeneralGroup(key.clone(), match group.send_mode {
+                    tooltip(
+                        button(
+                            icon!(graphic_eq)
+                            .size(22)
+                        )
+                        .padding(Padding::default().horizontal(3))
+                        .style(
+                            match group.send_mode {
+                                SendMode::Frequency => Box::new(button_style(true)),
+                                _ => Box::new(button::text) as Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>,
+                            }
+                        )
+                        .on_press(Message::ToggleGeneralGroup(key.clone(), match group.send_mode {
                             SendMode::Frequency => SendMode::Normal,
                             _ => SendMode::Frequency,
-                        }))
+                        })),
+                        match group.send_mode {
+                            SendMode::Frequency => "Надсилати з частотою: Вкл.",
+                            _ => "Надсилати з частотою: Викл.",
+                        },
+                    )
+                    .delay(Duration::from_millis(500))
+                    .style(tooltip_style)
                 )
                 .push(
-                    button(
-                        icon!(remove)
-                        .size(22)
+                    tooltip(
+                        button(
+                            icon!(remove)
+                            .size(22)
+                        )
+                        .padding(0)
+                        .style(button::text)
+                        .on_press(Message::ToggleGeneralGroup(key.clone(), SendMode::Off)), 
+                        "Не надсилати",
                     )
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::ToggleGeneralGroup(key.clone(), SendMode::Off))
                 )
             )
             .style(entry_style)
@@ -383,13 +397,16 @@ impl CategoryScreen {
                     .width(Length::Fill)
                 )
                 .push(
-                    button(
-                        icon!(add)
-                        .size(22)
+                    tooltip(
+                        button(
+                            icon!(add)
+                            .size(22)
+                        )
+                        .padding(0)
+                        .style(button::text)
+                        .on_press(Message::ToggleGeneralGroup(key.clone(), SendMode::Normal)), 
+                        "Додати, щоб надсилати"
                     )
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::ToggleGeneralGroup(key.clone(), SendMode::Normal))
                 )
             )
             .style(entry_style)
@@ -419,6 +436,7 @@ impl CategoryScreen {
                     Column::new()
                     .padding(Padding::default().horizontal(15))
                     .spacing(25)
+                    .width(Length::Fill)
                     .align_x(Alignment::Center)
                     .push("Відправляти")
                     .push(added)
@@ -492,30 +510,39 @@ impl CategoryScreen {
                     .width(Length::Fill)
                 )
                 .push(
-                    button(
-                        icon!(graphic_eq)
-                        .size(22)
-                    )
-                    .padding(Padding::default().horizontal(3))
-                    .style(
-                        match mode {
-                            SendMode::Frequency => Box::new(button_style(true)),
-                            _ => Box::new(button::text) as Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>,
-                        }
-                    )
-                    .on_press(Message::ToggleGroup(index, key.clone(), match mode {
+                    tooltip(
+                        button(
+                            icon!(graphic_eq)
+                            .size(22)
+                        )
+                        .padding(Padding::default().horizontal(3))
+                        .style(
+                            match mode {
+                                SendMode::Frequency => Box::new(button_style(true)),
+                                _ => Box::new(button::text) as Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>,
+                            }
+                        )
+                        .on_press(Message::ToggleGroup(index, key.clone(), match mode {
                             SendMode::Frequency => SendMode::Normal,
                             _ => SendMode::Frequency,
-                        }))
+                        })),
+                        match mode {
+                             SendMode::Frequency => "Надсилати з частотою: Вкл.",
+                             _ => "Надсилати з частотою: Викл.",
+                         },
+                    )
                 )
                 .push(
-                    button(
-                        icon!(remove)
-                        .size(22)
+                    tooltip(
+                        button(
+                            icon!(remove)
+                            .size(22)
+                        )
+                        .padding(0)
+                        .style(button::text)
+                        .on_press(Message::ToggleGroup(index, key.clone(), SendMode::Off)), 
+                        "Не надсилати",
                     )
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::ToggleGroup(index, key.clone(), SendMode::Off))
                 )
             )
             .style(entry_style)
@@ -538,13 +565,16 @@ impl CategoryScreen {
                     .width(Length::Fill)
                 )
                 .push(
-                    button(
-                        icon!(add)
-                        .size(22)
+                    tooltip(
+                        button(
+                            icon!(add)
+                            .size(22)
+                        )
+                        .padding(0)
+                        .style(button::text)
+                        .on_press(Message::ToggleGroup(index, key.clone(), SendMode::Normal)), 
+                        "Додати, щоб надсилати"
                     )
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::ToggleGroup(index, key.clone(), SendMode::Normal))
                 )
             )
             .style(entry_style)
@@ -575,6 +605,7 @@ impl CategoryScreen {
                     .padding(Padding::default().horizontal(15))
                     .spacing(25)
                     .align_x(Alignment::Center)
+                    .width(Length::Fill)
                     .push("Відправляти")
                     .push(added)
                     .push("Не відправляти")
@@ -641,13 +672,16 @@ impl CategoryScreen {
                             .width(Length::Fill)
                         )
                         .push(
-                            button(
-                                icon!(remove)
-                                .size(22)
+                            tooltip(
+                                button(
+                                    icon!(remove)
+                                    .size(22)
+                                )
+                                .padding(0)
+                                .style(button::text)
+                                .on_press(Message::ToggleNetwork(index, *id, false)), 
+                                "Не надсилати",
                             )
-                            .padding(0)
-                            .style(button::text)
-                            .on_press(Message::ToggleNetwork(index, *id, false))
                         )
                     )
                     .style(entry_style)
@@ -665,13 +699,16 @@ impl CategoryScreen {
                             .width(Length::Fill)
                         )
                         .push(
-                            button(
-                                icon!(add)
-                                .size(22)
+                            tooltip(
+                                button(
+                                    icon!(add)
+                                    .size(22)
+                                )
+                                .padding(0)
+                                .style(button::text)
+                                .on_press(Message::ToggleNetwork(index, *id, true)), 
+                                "Додати, щоб надсилати"
                             )
-                            .padding(0)
-                            .style(button::text)
-                            .on_press(Message::ToggleNetwork(index, *id, true))
                         )
                     )
                     .style(entry_style)
@@ -704,13 +741,16 @@ impl CategoryScreen {
                             .width(Length::Fill)
                         )
                         .push(
-                            button(
-                                icon!(remove)
-                                .size(22)
+                            tooltip(
+                                button(
+                                    icon!(remove)
+                                    .size(22)
+                                )
+                                .padding(0)
+                                .style(button::text)
+                                .on_press(Message::ToggleSource(index, source.clone(), false)), 
+                                "Не надсилати",
                             )
-                            .padding(0)
-                            .style(button::text)
-                            .on_press(Message::ToggleSource(index, source.clone(), false))
                         )
                     )
                     .style(entry_style)
@@ -728,13 +768,16 @@ impl CategoryScreen {
                             .width(Length::Fill)
                         )
                         .push(
-                            button(
-                                icon!(add)
-                                .size(22)
+                            tooltip(
+                                button(
+                                    icon!(add)
+                                    .size(22)
+                                )
+                                .padding(0)
+                                .style(button::text)
+                                .on_press(Message::ToggleSource(index, source.clone(), true)), 
+                                "Додати, щоб надсилати"
                             )
-                            .padding(0)
-                            .style(button::text)
-                            .on_press(Message::ToggleSource(index, source.clone(), true))
                         )
                     )
                     .style(entry_style)
@@ -767,13 +810,16 @@ impl CategoryScreen {
                             .width(Length::Fill)
                         )
                         .push(
-                            button(
-                                icon!(remove)
-                                .size(22)
+                            tooltip(
+                                button(
+                                    icon!(remove)
+                                    .size(22)
+                                )
+                                .padding(0)
+                                .style(button::text)
+                                .on_press(Message::ToggleComment(index, comment.clone(), false)), 
+                                "Не надсилати",
                             )
-                            .padding(0)
-                            .style(button::text)
-                            .on_press(Message::ToggleComment(index, comment.clone(), false))
                         )
                     )
                     .style(entry_style)
@@ -791,13 +837,16 @@ impl CategoryScreen {
                             .width(Length::Fill)
                         )
                         .push(
-                            button(
-                                icon!(add)
-                                .size(22)
+                            tooltip(
+                                button(
+                                    icon!(add)
+                                    .size(22)
+                                )
+                                .padding(0)
+                                .style(button::text)
+                                .on_press(Message::ToggleComment(index, comment.clone(), true)), 
+                                "Додати, щоб надсилати"
                             )
-                            .padding(0)
-                            .style(button::text)
-                            .on_press(Message::ToggleComment(index, comment.clone(), true))
                         )
                     )
                     .style(entry_style)
@@ -831,6 +880,7 @@ impl CategoryScreen {
                     .padding(Padding::default().horizontal(15))
                     .spacing(15)
                     .align_x(Alignment::Center)
+                    .width(Length::Fill)
                     .push("Відправляти")
                     .push(active)
                     .push("Не відправляти")
@@ -971,6 +1021,25 @@ fn text_input_style(theme: &iced::Theme, status: text_input::Status) -> text_inp
         },
         ..text_input::default(theme, status)
     }
+}
+
+fn tooltip_style(theme: &iced::Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(palette.background.weakest.color.into()),
+        text_color: Some(palette.background.weakest.text),
+        border: Border::default().rounded(3),
+        shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 2.0, offset: Vector::new(0.0, 0.0) },
+        ..Default::default()
+    }
+}
+
+const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
+
+fn tooltip<'a, Message: 'a>(content: impl Into<Element<'a, Message>>, tooltip_text: impl Into<Element<'a, Message>>) -> tooltip_widget::Tooltip<'a, Message> {
+    tooltip_widget(content, tooltip_text, tooltip_widget::Position::Top)
+    .delay(TOOLTIP_DELAY)
+    .style(tooltip_style)
 }
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
