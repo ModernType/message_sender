@@ -45,13 +45,16 @@ fn main() {
         .init();
     }
 
+    let version = env!("CARGO_PKG_VERSION");
+    tracing::warn!("Starting Modern Sender v{}", version);
+
     iced::application::timed(
         App::new,
         App::update,
         App::subscription,
         App::view,
     )
-    .title("Modern Sender v1.0")
+    .title(move |_state: &App| format!("Modern Sender v{}", version))
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
     .font(include_bytes!("ui/icons/MaterialIcons-Regular.ttf"))
