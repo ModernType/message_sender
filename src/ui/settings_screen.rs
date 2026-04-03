@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fs::File, io::Write, path::PathBuf};
 
 use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, svg, text, text_input}};
 use rfd::{FileHandle, MessageDialogResult};
@@ -40,6 +40,7 @@ pub enum Message {
     ShowAlert(String, Box<Message>),
     ClearSignal,
     ClearWhatsapp,
+    AddIcon,
 }
 
 impl From<Message> for MainMessage {
@@ -81,6 +82,15 @@ impl SettingsScreen {
                 else {
                     data.formatting = None;
                 }
+            },
+            Message::AddIcon => {
+                return Task::future(async {
+                    let res = tokio::task::spawn_blocking(add_app_launcher).await.unwrap();
+                    match res {
+                        Ok(()) => notification!("Іконку додано"),
+                        Err(e) => notification!("Помилка додавання іконки: {}", e)
+                    }
+                })
             },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
                 match recieve_address_edit.parse() {
@@ -455,6 +465,28 @@ impl SettingsScreen {
                             .padding(10)
                         )
                     )
+                    .push_maybe({
+                        #[cfg(any(target_os = "linux", debug_assertions))]
+                        let is_linux = true;
+                        #[cfg(not(any(target_os = "linux", debug_assertions)))]
+                        let is_linux = false;
+
+                        is_linux.then(
+                            || button(
+                                Row::new()
+                                .spacing(5)
+                                .push(
+                                    icon!(install_desktop)
+                                )
+                                .push(
+                                    "Додати значок до програм"
+                                )
+                            )
+                            .on_press(Message::AddIcon)
+                            .style(button_wrapper(button::primary))
+                            .padding(10)
+                        )
+                    })
                     .push_maybe(
                         {
                             #[cfg(debug_assertions)]
@@ -499,5 +531,37 @@ fn button_wrapper<'a>(style_fn: impl Fn(&iced::Theme, button::Status) -> button:
             shadow: Shadow { color: Color::BLACK.scale_alpha(0.3), blur_radius: 4.0, offset: Vector::new(0.0, 2.0) },
             ..style_fn(theme, status)
         }
+    }
+}
+
+fn add_app_launcher() -> anyhow::Result<()> {
+    let err = std::io::Error::from(std::io::ErrorKind::NotFound);
+
+    let mut path = std::env::home_dir().ok_or(err)?;
+    path.extend([".local", "share", "applications"]);
+    if let Ok(true) = std::fs::exists(&path) {
+        path.push("modern_sender.desktop");
+        let exec_path = std::env::current_exe()?;
+        let text = format!("[Desktop Entry]
+Type=Application
+Name=Modern Sender
+Comment=A brief description of your app
+Exec={}
+Icon=system-run
+Terminal=false
+Categories=Utility;
+", exec_path.to_string_lossy());
+
+        let mut file = File::options()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)?;
+        file.write_all(text.as_bytes())?;
+
+        Ok(())
+    }
+    else {
+        Err(std::io::Error::from(std::io::ErrorKind::NotFound).into())
     }
 }
