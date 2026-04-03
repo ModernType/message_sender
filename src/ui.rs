@@ -3,7 +3,7 @@ use std::{
 };
 use futures::{SinkExt, Stream, StreamExt, channel::{mpsc::UnboundedSender}};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Shadow, Subscription, Task, animation::Easing, keyboard, widget::{Row, Stack, container, text}};
-use crate::{appdata::AppData, message_server::{self, AcceptedMessage}, messangers::whatsapp, send_categories::{NetworkInfo, Parameters}, ui::{category_screen::CategoryScreen, message_history::{SaveMessageInfo, SendStatus}, side_menu::{LinkState, SideMenu}, theme::Theme}};
+use crate::{appdata::AppData, message::OperatorMessage, message_server, messangers::whatsapp, send_categories::{NetworkInfo, Parameters}, ui::{category_screen::CategoryScreen, formatting_screen::FormattingScreen, message_history::{SaveMessageInfo, SendStatus}, side_menu::{LinkState, SideMenu}, theme::Theme}};
 
 use crate::{messangers::signal::{SignalMessage, SignalWorker}, ui::{ext::ColorExt, main_screen::MainScreen, message_history::SendMessageInfo, settings_screen::SettingsScreen}};
 
@@ -13,6 +13,7 @@ pub mod message_history;
 pub mod category_screen;
 pub mod side_menu;
 pub mod icons;
+pub mod formatting_screen;
 mod ext;
 pub mod theme;
 
@@ -22,7 +23,8 @@ const NOTIFICATION_SHOW_TIME: u64 = 6000;
 pub enum Screen {
     Main,
     Settings,
-    Categories
+    Categories,
+    Formatting,
 }
 
 pub enum Message {
@@ -30,6 +32,7 @@ pub enum Message {
     SettingsScrMessage(settings_screen::Message),
     CategoriesScrMessage(category_screen::Message),
     SideMenuMessage(side_menu::Message),
+    FormattingScrMessage(formatting_screen::Message),
     SignalMessage(SignalMessage),
     SignalDisconnected,
     SetWhatsappClient(Option<Arc<whatsapp_rust::Client>>),
@@ -40,7 +43,7 @@ pub enum Message {
     CancelMessage(Arc<SendMessageInfo>),
     LoadMessages(Vec<Arc<SendMessageInfo>>),
     SetScreen(Screen),
-    AcceptMessage(Vec<AcceptedMessage>),
+    AcceptMessage(Vec<OperatorMessage>),
     ThemeChange(Theme),
     OnClose,
     UpdateGroupList,
@@ -50,6 +53,7 @@ pub enum Message {
     RecivedNetworks(HashMap<u64, NetworkInfo>),
     Keyboard(keyboard::Event),
     StartServer,
+    UpdateFormatting,
     None,
 }
 
@@ -82,6 +86,7 @@ pub struct App {
     main_scr: MainScreen,
     sett_scr: SettingsScreen,
     category_scr: CategoryScreen,
+    format_scr: FormattingScreen,
     signal_task_send: Option<UnboundedSender<SignalMessage>>,
     now: Instant,
     notification: Notification,
@@ -125,6 +130,7 @@ impl App {
                 main_scr: MainScreen::new(),
                 sett_scr: SettingsScreen::new(&data),
                 category_scr: CategoryScreen::new(),
+                format_scr: FormattingScreen::new(data.formatting.as_ref()),
                 signal_logged: data.signal_logged,
                 whatsapp_logged: data.whatsapp_logged,
                 data,
@@ -159,6 +165,7 @@ impl App {
             Message::SettingsScrMessage(m) => self.sett_scr.update(m, &mut self.data),
             Message::CategoriesScrMessage(m) => self.category_scr.update(m, &mut self.data),
             Message::SideMenuMessage(m) => self.side_menu.update(m, now, &mut self.data),
+            Message::FormattingScrMessage(m) => self.format_scr.update(m, &mut self.data),
             Message::SignalMessage(m) => {
                 if let Some(channel) = self.signal_task_send.as_ref() {
                     let mut channel = channel.clone();
@@ -183,6 +190,9 @@ impl App {
                 task
             },
             Message::SetScreen(screen) => {
+                if self.cur_screen == Screen::Formatting {
+                    self.data.formatting = Some(self.format_scr.formatting())
+                }
                 self.cur_screen = screen;
                 self.side_menu.open.go_mut(false, now);
                 if let Screen::Main = screen {
@@ -339,21 +349,20 @@ impl App {
                 Task::none()
             },
             Message::AcceptMessage(messages) => {
-                let autosend = messages.iter().fold(self.data.autosend, |autosend, msg| autosend && !msg.autosend_overwrite);
                 for m in messages.iter() {
-                    if let Some(source) = &m.source && !self.data.sources.contains(source) {
-                        self.data.sources.insert(source.clone());
+                    if  !self.data.sources.contains(&m.source) {
+                        self.data.sources.insert(m.source.clone());
                     }
                     if let Some(comment) = &m.comment && !self.data.comments.contains(comment) {
                         self.data.comments.insert(comment.clone());
                     }
                 }
 
-                if autosend {
+                if self.data.autosend {
                     Task::batch(
                         messages
                         .into_iter()
-                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.text, msg.freq, msg.network, msg.source, msg.comment).into()))
+                        .map(|msg| Task::done(main_screen::Message::SendMessage(String::new(), Some(msg.frequency.clone()), msg.network_id, Some(msg.source.clone()), msg.comment.clone()).into()))
                     )
                 }
                 else {
@@ -365,6 +374,14 @@ impl App {
                         Task::none()
                     }
                 }
+            },
+            Message::UpdateFormatting => {
+                if let Some(format) = &self.data.formatting {
+                    let content = iced::widget::text_editor::Content::with_text(&format.to_string());
+                    self.format_scr.editor = content;
+                }
+
+                Task::none()
             },
             Message::OnClose => {
                 log::warn!("Closing application, saving data...");
@@ -442,7 +459,8 @@ impl App {
                 match self.cur_screen {
                     Screen::Main => self.main_scr.view(self.is_tutorial(), &self.data).map(Into::into),
                     Screen::Settings => self.sett_scr.view(&self.data).map(Into::into),
-                    Screen::Categories => self.category_scr.view(&self.data).map(Into::into)
+                    Screen::Categories => self.category_scr.view(&self.data).map(Into::into),
+                    Screen::Formatting => self.format_scr.view().map(Into::into),
                 }
             )
         )

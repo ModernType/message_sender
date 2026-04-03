@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, sync::Arc, time::Instant};
 use iced::{Alignment, Animation, Border, Color, Element, Length, Task, alignment::Horizontal, border::Radius, widget::{Column, Row, button, container, qr_code, responsive, scrollable, space, text, text_editor}};
 use serde::{Deserialize, Serialize};
 
-use crate::{icon, message::SendMode, message_server::AcceptedMessage, messangers::Key, ui::{AppData, message_history::SendMessageInfo}};
+use crate::{icon, message::{MessageInner, OperatorMessage, SendMode}, messangers::Key, ui::{AppData, message_history::SendMessageInfo}};
 
 use super::Message as MainMessage;
 use super::ext::PushMaybe;
@@ -45,8 +45,8 @@ pub(super) struct MainScreen {
     pub show_side_bar: Animation<bool>,
     pub edit: Option<Arc<SendMessageInfo>>,
     now: Instant,
-    pub message_queue: Vec<AcceptedMessage>,
-    pub cur_message: Option<AcceptedMessage>
+    pub message_queue: Vec<OperatorMessage>,
+    pub cur_message: Option<OperatorMessage>
 }
 
 impl MainScreen {
@@ -113,9 +113,10 @@ impl MainScreen {
                 self.message_content.perform(action);
             },
             Message::SendMessagePressed => {
-                let (text, freq, network, source, comment) = if let Some(mut message) = self.cur_message.take() {
-                    message.text = self.message_content.text();
-                    (message.text, message.freq, message.network, message.source, message.comment)
+                let (text, freq, network, source, comment) = if let Some(message) = self.cur_message.take() {
+                    let text = self.message_content.text();
+                    let MessageInner {frequency, network_id, source, comment, ..} = message.0;
+                    (text, Some(frequency), network_id, Some(source), comment)
                 }
                 else {
                     (self.message_content.text(), None, None, None, None)
@@ -298,7 +299,7 @@ impl MainScreen {
             Message::NextMessage => {
                 self.cur_message = self.message_queue.pop();
                 if let Some(message) = &self.cur_message {
-                    self.message_content = text_editor::Content::with_text(&message.text);
+                    self.message_content = text_editor::Content::with_text(&message.format(data.formatting.as_ref()));
                     self.show_side_bar.go_mut(true, now);
                 }
                 else {

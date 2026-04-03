@@ -1,14 +1,39 @@
 use std::{
     fmt::{Display, Write},
-    ops::Deref,
+    ops::Deref, sync::LazyLock,
 };
 
 use derive_more::Display;
 use serde::Deserialize;
 
+pub static TEST_MESSAGE: LazyLock<Message> = LazyLock::new(|| Message(MessageInner {
+    message: MessageGroup(vec![
+        IndividualMessage { datetime: "2026-04-03 13:55:56".to_owned(), message: CleanedMessage("1. Я тебе питаю як справи".to_owned()) },
+        IndividualMessage { datetime: "2026-04-03 13:55:59".to_owned(), message: CleanedMessage("2. У мене все добре!".to_owned()) },
+    ]),
+    comment: Some("Щось дуже важливе".to_owned()),
+    reciever: Name("Отримайко".to_owned()),
+    sender: Name("Надсилайко".to_owned()),
+    datetime: "24.02.2022 06:05:55".to_owned(),
+    frequency: "123.456 МГц".to_owned(),
+    location: "Десь там".to_owned(),
+    title: "УКХ мережа таких".to_owned(),
+    source: "Прийшло з апарату".to_owned(),
+    network_id: None,
+}));
+
 #[derive(Deserialize, Display, Debug, Default)]
 #[serde(from = "MessageOuter", default)]
 pub struct Message(pub MessageInner);
+
+impl Message {
+    pub fn format(&self, formatting: Option<&super::Formatting>) -> String {
+        match formatting {
+            Some(formatting) => formatting.format_message(self),
+            None => self.to_string()
+        }
+    }
+}
 
 impl From<MessageOuter> for Message {
     fn from(value: MessageOuter) -> Self {
@@ -78,9 +103,12 @@ pub struct MessageGroup(Vec<IndividualMessage>);
 
 impl Display for MessageGroup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for m in self.0.iter() {
+        let last_index = self.0.len() - 1;
+        for (i, m) in self.0.iter().enumerate() {
             f.write_str(m)?;
-            f.write_char('\n')?;
+            if i != last_index {
+                f.write_char('\n')?;
+            }
         }
         Ok(())
     }

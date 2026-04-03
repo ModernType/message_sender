@@ -2,7 +2,7 @@ use std::time::Instant;
 use derive_more::Display;
 use iced::{Alignment, Animation, Border, Color, Element, Length, Padding, Task, border::Radius, widget::{Column, Row, Stack, button, container, mouse_area, opaque, space, svg, text, tooltip}};
 
-use crate::{icon, message::OperatorMessage, message_server::AcceptedMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
+use crate::{icon, message::OperatorMessage, messangers::{signal::SignalMessage, whatsapp}, notification, ui::{AppData, Screen, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}}};
 
 use super::Message as MainMessage;
 
@@ -12,6 +12,7 @@ pub enum Message {
     LinkWhatsapp,
     Categories,
     Settings,
+    Format,
     Main,
     Animate,
     ToggleSideMenu,
@@ -57,6 +58,7 @@ impl SideMenu {
             Message::Categories => Task::done(MainMessage::SetScreen(Screen::Categories)),
             Message::Settings => Task::done(MainMessage::SetScreen(Screen::Settings)),
             Message::Main => Task::done(MainMessage::SetScreen(Screen::Main)),
+            Message::Format => Task::done(MainMessage::SetScreen(Screen::Formatting)),
             Message::Animate => Task::none(),
             Message::ToggleSideMenu => {
                 self.open.go_mut(!self.open.value(), now);
@@ -109,12 +111,10 @@ impl SideMenu {
                     };
 
                     let message = match serde_json::from_str::<Vec<OperatorMessage>>(&s) {
-                        Ok(msgs) => msgs.into_iter().map(AcceptedMessage::from).collect::<Vec<_>>(),
+                        Ok(msgs) => msgs,
                         Err(e) => {
                             log::error!("Message parse error: {e}");
-                            let mut message = AcceptedMessage::from(s);
-                            message.autosend_overwrite = true;
-                            vec![message]
+                            vec![]
                         }
                     };
 
@@ -247,6 +247,18 @@ impl SideMenu {
                     space()
                     .height(Length::Fill)
                 )
+                .push_maybe(data.formatting.as_ref().map(|_| {
+                    sidebar_tooltip(
+                        button(
+                            icon!(edit_note)
+                            .size(28)
+                        )
+                        .on_press(Message::Format)
+                        .style(menu_button_style(selected_screen == Screen::Formatting))
+                        .padding(Padding::default().horizontal(5)),
+                        "Формат повідомлення"
+                    )
+                }))
                 .push(
                     sidebar_tooltip(
                         button(
@@ -393,6 +405,17 @@ impl SideMenu {
             space()
             .height(Length::Fill)
         )
+        .push_maybe(data.formatting.as_ref().map(|_| {
+            menu_button(
+                icon!(edit_note)
+                    .size(28),
+                text("Формат повідомлення")
+                    .height(Length::Fill)
+                    .align_y(Alignment::Center),
+                Some(Message::Format),
+                selected_screen == Screen::Formatting
+            )
+        }))
         .push(
             menu_button(
                 icon!(settings)

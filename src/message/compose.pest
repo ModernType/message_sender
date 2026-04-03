@@ -1,0 +1,28 @@
+
+freq = { "%частота%" }
+text = { "%текст%" }
+who = { "%хто%" }
+whom = { "%кому%" }
+title = { "%заголовок%" }
+location = { "%привʼязка%" }
+date = { "%дата%" }
+source = { "%джерело%" }
+comment = { "%коментар%" }
+
+literal = { (!"%" ~ ANY)* }
+invalid = { "%" ~ literal ~ "%" }
+
+special = _{
+    freq |
+    text |
+    who |
+    whom |
+    title |
+    location |
+    date |
+    source |
+    comment |
+    invalid
+}
+
+format = _{ special? ~ literal ~ (special ~ literal)* ~ special? }

@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::{File, OpenOptions}, io::Write, net::{IpAddr, Ipv4Addr, SocketAddrV4}, path::{Path, PathBuf}, sync::LazyLock};
 
-use crate::ui::theme::Theme;
+use crate::{message::Formatting, ui::theme::Theme};
 use local_ip_address::local_ip;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
@@ -67,6 +67,8 @@ pub struct AppData {
     pub message_file: bool,
     /// Not sent messages saved after close up
     pub saved_messages: Vec<SaveMessageInfo>,
+    /// Formatting used to send messages
+    pub formatting: Option<Formatting>,
 }
 
 impl From<AppData1> for AppData {
@@ -85,7 +87,8 @@ impl From<AppData1> for AppData {
             sources: value.sources,
             comments: value.comments,
             message_file: value.message_file,
-            saved_messages: value.saved_messages
+            saved_messages: value.saved_messages,
+            ..Default::default()
         }
     }
 }

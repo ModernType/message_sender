@@ -27,12 +27,10 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
     .route("/", post(move |s: String| async move {
         log::info!("Got messages on server");
         let message = match serde_json::from_str::<Vec<OperatorMessage>>(&s) {
-            Ok(msgs) => msgs.into_iter().map(AcceptedMessage::from).collect::<Vec<_>>(),
+            Ok(msgs) => msgs,
             Err(e) => {
                 log::error!("Message parse error: {e}");
-                let mut message = AcceptedMessage::from(s);
-                message.autosend_overwrite = true;
-                vec![message]
+                vec![]
             }
         };
 
@@ -59,43 +57,4 @@ pub async fn start_server(addr: SocketAddrV4, mut msg_send_channel: UnboundedSen
     info!("Starting serving");
     axum::serve(listener, router).await?;
     Ok(())
-}
-
-#[derive(Debug)]
-pub struct AcceptedMessage {
-    pub text: String,
-    pub freq: Option<String>,
-    pub network: Option<u64>,
-    pub source: Option<String>,
-    pub comment: Option<String>,
-    pub autosend_overwrite: bool,
-}
-
-impl From<OperatorMessage> for AcceptedMessage {
-    fn from(value: OperatorMessage) -> Self {
-        let freq = Some(value.0.frequency.to_string());
-        let has_source = !value.source.is_empty();
-
-        Self {
-            text: value.to_string(),
-            freq,
-            network: value.0.network_id,
-            source: has_source.then_some(value.0.source),
-            comment: value.0.comment,
-            autosend_overwrite: false,
-        }
-    }
-}
-
-impl From<String> for AcceptedMessage {
-    fn from(value: String) -> Self {
-        Self {
-            text: value,
-            freq: None,
-            network: None,
-            source: None,
-            comment: None,
-            autosend_overwrite: false
-        }
-    }
 }

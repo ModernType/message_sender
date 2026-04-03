@@ -4,15 +4,28 @@ use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vec
 use rfd::{FileHandle, MessageDialogResult};
 use tracing::{error, warn};
 
-use crate::{icon, messangers::signal::SignalMessage, notification, send_categories::parse_networks_data, ui::{self, AppData, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}, side_menu::LinkState, theme::Theme}};
+use crate::{icon, message::Formatting, messangers::signal::SignalMessage, notification, send_categories::parse_networks_data, ui::{self, AppData, ext::PushMaybe, icons::{SIGNAL_ICON, WHATSAPP_ICON}, side_menu::LinkState, theme::Theme}};
 
 use super::Message as MainMessage;
+
+const DEFAULT_FORMAT: &str = "%заголовок%
+%привʼязка%
+
+%дата%
+
+Відправник: %хто%
+Отримувач: %кому%
+
+%текст%
+
+Коментар: %коментар%";
 
 #[derive(Debug, Clone)]
 pub enum Message {
     ToggleMarkdown(bool),
     ToggleMessageFile(bool),
     ToggleAutoSend(bool),
+    ToggleCustomFormat(bool),
     RecieveAddressEditChanged(String),
     HistoryLenEdit(String),
     ThemeSelected(Theme),
@@ -59,7 +72,16 @@ impl SettingsScreen {
             },
             Message::ToggleAutoSend(state) => {
                 data.autosend = state;
-            }
+            },
+            Message::ToggleCustomFormat(state) => {
+                if state {
+                    data.formatting = Some(Formatting::parse(DEFAULT_FORMAT));
+                    return Task::done(MainMessage::UpdateFormatting);
+                }
+                else {
+                    data.formatting = None;
+                }
+            },
             Message::RecieveAddressEditChanged(recieve_address_edit) => {
                 match recieve_address_edit.parse() {
                     Ok(addr) => {
@@ -317,6 +339,11 @@ impl SettingsScreen {
                                 checkbox(data.message_file)
                                 .label("Показувати функцію відправки повідомлення з файлу")
                                 .on_toggle(Message::ToggleMessageFile)
+                            )
+                            .push(
+                                checkbox(data.formatting.is_some())
+                                .label("Використовувати користувацький формат повідомлень")
+                                .on_toggle(Message::ToggleCustomFormat)
                             )
                             .push(
                                 checkbox(data.markdown)
