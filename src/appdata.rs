@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs::{File, OpenOptions}, io::Write, net::{IpAddr, Ipv4Addr, SocketAddrV4}, path::Path};
+use std::{collections::{HashMap, HashSet}, fs::{File, OpenOptions}, io::Write, net::{IpAddr, Ipv4Addr, SocketAddrV4}, path::{Path, PathBuf}, sync::LazyLock};
 
 use crate::ui::theme::Theme;
 use local_ip_address::local_ip;
@@ -90,9 +90,16 @@ impl From<AppData1> for AppData {
     }
 }
 
+static SETTINGS_PATH: LazyLock<PathBuf> = LazyLock::new(
+    || match std::env::home_dir() {
+        Some(path) => path.join(".sender/data.ron"),
+        None => PathBuf::from("data.ron"),
+    }
+);
+
 impl AppData {
     pub fn load() -> anyhow::Result<Self> {
-        let data = File::open("data.ron")?;
+        let data = File::open(SETTINGS_PATH.as_path())?;
         let state = ron::de::from_reader(data)?;
         Ok(state)
     }
@@ -129,7 +136,7 @@ impl AppData {
             .create(true)
             .write(true)
             .truncate(true)
-            .open("data.ron")?;
+            .open(SETTINGS_PATH.as_path())?;
         let s = ron::ser::to_string_pretty(
             self,
             PrettyConfig::default(),

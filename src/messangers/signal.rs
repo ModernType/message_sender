@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, net::TcpStream, sync::Arc, time::{Duration, SystemTime}};
+use std::{collections::VecDeque, net::TcpStream, path::PathBuf, sync::{Arc, LazyLock}, time::{Duration, SystemTime}};
 
 use futures::{FutureExt, SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender}, pin_mut};
 use log::info;
@@ -10,6 +10,15 @@ use tracing::{error, warn};
 use crate::{message::SendMode, messangers::Key, notification, ui::{self, message_history::{GroupInfoSignal, SendMessageInfo, SendStatus}, side_menu::LinkState}};
 
 type Manager = presage::Manager<SqliteStore, Registered>;
+
+static DB_STR: LazyLock<PathBuf> = LazyLock::new(|| {
+    let mut home = match std::env::home_dir() {
+        Some(v) => v,
+        None => return "signal_data.db".into(),
+    };
+    home.extend([".sender", "signal_data.db"]);
+    home
+});
 
 #[derive(Debug)]
 pub enum SignalMessage {
@@ -177,7 +186,8 @@ pub async fn get_groups(manager: Manager) -> anyhow::Result<Vec<(Key, String)>> 
 async fn get_store() -> Result<SqliteStore, SqliteStoreError> {
     let store = SqliteStore::open_with_options(
         SqliteConnectOptions::default()
-            .filename("signal_data.db")
+            // .filename("signal_data.db")
+            .filename(DB_STR.as_path())
             .create_if_missing(true),
         OnNewIdentity::Trust,
     )

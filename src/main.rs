@@ -24,6 +24,7 @@ fn panic_message_box(info: &PanicHookInfo) {
 
 fn main() {
     std::panic::set_hook(Box::new(panic_message_box));
+    let have_home = create_save_folder().is_ok();
 
     #[cfg(debug_assertions)]
     {
@@ -36,7 +37,17 @@ fn main() {
 
     #[cfg(not(debug_assertions))]
     {
-        let log_file = std::fs::File::create("sender.log").unwrap();
+        use std::path::PathBuf;
+        let path = if have_home {
+            let mut home = std::env::home_dir().unwrap();
+            home.extend([".sender", "sender.log"]);
+            home
+        }
+        else {
+            PathBuf::from("sender.log")
+        };
+
+        let log_file = std::fs::File::create(&path).unwrap();
         tracing_subscriber::FmtSubscriber::builder()
         .pretty()
         .with_max_level(LevelFilter::WARN)
@@ -62,4 +73,11 @@ fn main() {
     .exit_on_close_request(false)
     .run()
     .unwrap()
+}
+
+fn create_save_folder() -> anyhow::Result<()> {
+    let mut home = std::env::home_dir().ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?;
+    home.push(".sender");
+    std::fs::create_dir(&home)?;
+    Ok(())
 }

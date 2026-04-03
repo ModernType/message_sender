@@ -1,4 +1,4 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use whatsapp_rust::{Client, bot::Bot, store::SqliteStore, transport::{TokioWebSocketTransportFactory, UreqHttpClient}, types::events::{Event, PinUpdate}};
@@ -7,6 +7,15 @@ use waproto::whatsapp::{self as wa, sync_action_value::PinAction};
 use crate::{message::{SendMode, parse_message_with_whatsapp_format}, messangers::Key, ui::{self, side_menu::LinkState, message_history::{SendMessageInfo, SendStatus}}};
 
 pub static UI_MESSAGE_SENDER: OnceLock<UnboundedSender<ui::Message>> = OnceLock::new();
+static DB_STR: LazyLock<String> = LazyLock::new(|| {
+    let mut home = match std::env::home_dir() {
+        Some(v) => v,
+        None => return "sqlite:///whatsapp_data.db".to_owned(),
+    };
+    home.extend([".sender", "whatsapp_data.db"]);
+    
+    format!("sqlite://{}", home.to_string_lossy())
+});
 
 async fn send_ui_message(messsage: impl Into<ui::Message>) {
     UI_MESSAGE_SENDER.get().unwrap().send(messsage.into()).await.unwrap()
@@ -27,11 +36,10 @@ pub async fn start_whatsapp_task() {
 
 async fn start_whatsapp_task_inner() -> anyhow::Result<tokio::task::JoinHandle<()>> {
     _ = UI_MESSAGE_SENDER.get().unwrap().send(ui::side_menu::Message::SetWhatsappState(LinkState::Linking).into()).await;
-    let store = Arc::new(SqliteStore::new("whatsapp_data.db").await?);
+    let store = Arc::new(SqliteStore::new(&DB_STR).await?);
     
     let transport = TokioWebSocketTransportFactory::new();
     let client = UreqHttpClient::new();
-
 
     let mut bot = Bot::builder()
     .with_backend(store)

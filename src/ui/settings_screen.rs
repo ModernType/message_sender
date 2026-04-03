@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use iced::{Alignment, Border, Color, Element, Length, Padding, Shadow, Task, Vector, widget::{Column, Row, button, checkbox, column, container, pick_list, scrollable, svg, text, text_input}};
 use rfd::{FileHandle, MessageDialogResult};
 use tracing::{error, warn};
@@ -179,13 +181,21 @@ impl SettingsScreen {
             },
             Message::ClearSignal => {
                 use std::fs::remove_file;
-                if let Err(e) = remove_file("signal_data.db") {
+                let base_path = match std::env::home_dir() {
+                    Some(mut v) => {
+                        v.push(".sender");
+                        v
+                    },
+                    None => PathBuf::new(),
+                };
+
+                if let Err(e) = remove_file(base_path.join("signal_data.db")) {
                     warn!("Error while clearing signal: {}", e)
                 }
-                if let Err(e) = remove_file("signal_data.db-shm") {
+                if let Err(e) = remove_file(base_path.join("signal_data.db-shm")) {
                     warn!("Error while clearing signal: {}", e)
                 }
-                if let Err(e) = remove_file("signal_data.db-wal") {
+                if let Err(e) = remove_file(base_path.join("signal_data.db-wal")) {
                     warn!("Error while clearing signal: {}", e)
                 }
                 data.signal_logged = false;
@@ -196,13 +206,21 @@ impl SettingsScreen {
             },
             Message::ClearWhatsapp => {
                 use std::fs::remove_file;
-                if let Err(e) = remove_file("whatsapp_data.db") {
+                let base_path = match std::env::home_dir() {
+                    Some(mut v) => {
+                        v.push(".sender");
+                        v
+                    },
+                    None => PathBuf::new(),
+                };
+
+                if let Err(e) = remove_file(base_path.join("whatsapp_data.db")) {
                     warn!("Error while clearing whatsapp: {}", e)
                 }
-                if let Err(e) = remove_file("whatsapp_data.db-shm") {
+                if let Err(e) = remove_file(base_path.join("whatsapp_data.db-shm")) {
                     warn!("Error while clearing whatsapp: {}", e)
                 }
-                if let Err(e) = remove_file("whatsapp_data.db-wal") {
+                if let Err(e) = remove_file(base_path.join("whatsapp_data.db-wal")) {
                     warn!("Error while clearing whatsapp: {}", e)
                 }
                 data.whatsapp_logged = false;
