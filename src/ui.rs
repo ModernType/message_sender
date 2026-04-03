@@ -362,7 +362,7 @@ impl App {
                     Task::batch(
                         messages
                         .into_iter()
-                        .map(|msg| Task::done(main_screen::Message::SendMessage(String::new(), Some(msg.frequency.clone()), msg.network_id, Some(msg.source.clone()), msg.comment.clone()).into()))
+                        .map(|msg| Task::done(main_screen::Message::SendMessage(msg.format(self.data.formatting.as_ref()), Some(msg.frequency.clone()), msg.network_id, Some(msg.source.clone()), msg.comment.clone()).into()))
                     )
                 }
                 else {
