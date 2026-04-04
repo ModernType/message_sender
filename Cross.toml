@@ -1,4 +1,4 @@
-[target.x86_64-unknown-linux-musl]
+[target.x86_64-unknown-linux-gnu]
 image = "my-custom-cross:latest"
 docker_platform = "linux/amd64"
 
