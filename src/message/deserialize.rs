@@ -16,8 +16,8 @@ pub static TEST_MESSAGE: LazyLock<Message> = LazyLock::new(|| Message(MessageInn
     sender: Name("Надсилайко".to_owned()),
     datetime: "24.02.2022 06:05:55".to_owned(),
     frequency: "123.456 МГц".to_owned(),
-    location: "Десь там".to_owned(),
-    title: "УКХ мережа таких".to_owned(),
+    location: "район Звідти - Туди".to_owned(),
+    title: "УКХ р/м управління підрозділу".to_owned(),
     source: "Прийшло з апарату".to_owned(),
     network_id: None,
 }));

@@ -4,8 +4,9 @@ text = { "%текст%" }
 who = { "%хто%" }
 whom = { "%кому%" }
 title = { "%заголовок%" }
-location = { "%привʼязка%" }
+location = { "%район%" }
 date = { "%дата%" }
+time = { "%час%" }
 source = { "%джерело%" }
 comment = { "%коментар%" }
 
@@ -20,6 +21,7 @@ special = _{
     title |
     location |
     date |
+    time |
     source |
     comment |
     invalid

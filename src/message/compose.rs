@@ -24,10 +24,12 @@ pub enum FormatPart {
     Whom,
     #[display("%заголовок%")]
     Title,
-    #[display("%привʼязка%")]
+    #[display("%район%")]
     Location,
     #[display("%дата%")]
     Date,
+    #[display("%час%")]
+    Time,
     #[display("%джерело%")]
     Source,
     #[display("%коментар%")]
@@ -76,6 +78,7 @@ impl FromStr for Formatting {
                         Rule::date => Some(FormatPart::Date),
                         Rule::source => Some(FormatPart::Source),
                         Rule::comment => Some(FormatPart::Comment),
+                        Rule::time => Some(FormatPart::Time),
                         Rule::literal => Some(FormatPart::Literal(pair.as_str().to_owned())),
                         _ => None
                     }
@@ -99,6 +102,13 @@ impl Formatting {
 
     pub fn format_message(&self, message: &OperatorMessage) -> String {
         let mut res = String::new();
+        let (date, time) = {
+            let mut iter = message.datetime.split(' ');
+            let date = iter.next().unwrap();
+            let time = iter.next().unwrap();
+            (date, time)
+        };
+
         for part in self.parts.iter() {
             match part {
                 FormatPart::Freq => res.push_str(&message.frequency),
@@ -107,7 +117,8 @@ impl Formatting {
                 FormatPart::Whom => res.push_str(&message.reciever),
                 FormatPart::Title => res.push_str(&message.title),
                 FormatPart::Location => res.push_str(&message.location),
-                FormatPart::Date => res.push_str(&message.datetime),
+                FormatPart::Date => res.push_str(date),
+                FormatPart::Time => res.push_str(time),
                 FormatPart::Source => res.push_str(&message.source),
                 FormatPart::Comment => res.push_str(message.comment.as_deref().unwrap_or("")),
                 FormatPart::Literal(s) => res.push_str(s),
