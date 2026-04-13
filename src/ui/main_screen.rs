@@ -130,7 +130,7 @@ impl MainScreen {
                 ])
             }
             Message::SendMessage(message, freq, network, source, comment) => {
-                let mut message = SendMessageInfo::new(message, freq, source.clone(), comment.clone());
+                let mut message = SendMessageInfo::new(message, freq);
                 let mut groups: HashMap<&Key, SendMode> = HashMap::new();
                 let mut use_general = false;
 

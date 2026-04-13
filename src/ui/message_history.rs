@@ -13,8 +13,6 @@ const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
 pub struct SendMessageInfo {
     pub content: String,
     pub freq: Option<String>,
-    pub source: Option<String>,
-    pub comment: Option<String>,
     pub status: AtomicU8,
     pub groups_signal: Vec<GroupInfoSignal>,
     pub groups_whatsapp: Vec<GroupInfoWhatsapp>,
@@ -136,12 +134,10 @@ impl GroupInfoWhatsapp {
 }
 
 impl SendMessageInfo {
-    pub fn new(content: String, freq: Option<String>, source: Option<String>, comment: Option<String>) -> Self {
+    pub fn new(content: String, freq: Option<String>) -> Self {
         Self {
             content,
             freq,
-            source,
-            comment,
             status: AtomicU8::new(SendStatus::Pending as u8),
             groups_signal: Vec::new(),
             groups_whatsapp: Vec::new(),
@@ -441,8 +437,6 @@ impl SendMessageInfo {
 pub struct SaveMessageInfo {
     pub content: String,
     pub freq: Option<String>,
-    pub source: Option<String>,
-    pub comment: Option<String>,
     pub groups_signal: Vec<([u8; 32], SendMode)>,
     pub groups_whatsapp: Vec<(Jid, SendMode)>,
 }
@@ -455,8 +449,6 @@ impl From<&SendMessageInfo> for SaveMessageInfo {
         Self {
             content: value.content.clone(),
             freq: value.freq.clone(),
-            source: value.source.clone(),
-            comment: value.comment.clone(),
             groups_signal,
             groups_whatsapp,
         }
@@ -471,8 +463,6 @@ impl From<SaveMessageInfo> for SendMessageInfo {
         Self {
             content: value.content,
             freq: value.freq,
-            source: value.source,
-            comment: value.comment,
             status: AtomicU8::new(SendStatus::Pending as u8),
             groups_signal,
             groups_whatsapp,
