@@ -9,8 +9,8 @@ exclude = ["sqlite-storage"]
 [dependencies]
 futures = "0.3.31"
 image = "0.25.8"
-presage = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
-presage-store-sqlite = { git = "https://github.com/whisperfish/presage", rev = "fe3ed54c4844ae51c3a9fa49cf80a7816a31a425" }
+presage = { git = "https://github.com/whisperfish/presage", rev = "600c4ede51865f7de6ca21507e738a7bd70cc7ae" }
+presage-store-sqlite = { git = "https://github.com/whisperfish/presage", rev = "600c4ede51865f7de6ca21507e738a7bd70cc7ae", default-features = false }
 log = "0.4.28"
 anyhow = "1.0.100"
 axum = "0.8.7"
