@@ -3881,7 +3881,7 @@ dependencies = [
 
 [[package]]
 name = "modern-sender"
-version = "1.1.0-dev"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "axum",
