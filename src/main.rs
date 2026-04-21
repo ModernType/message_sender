@@ -56,8 +56,11 @@ fn main() {
         .init();
     }
 
-    let version = env!("CARGO_PKG_VERSION");
-    tracing::warn!("Starting Modern Sender v{}", version);
+    let title = concat!(
+        "Starting Modern Sender v",
+        env!("CARGO_PKG_VERSION"),
+    );
+    tracing::warn!("Starting {}", title);
 
     iced::application::timed(
         App::new,
@@ -65,7 +68,7 @@ fn main() {
         App::subscription,
         App::view,
     )
-    .title(move |_state: &App| format!("Modern Sender v{}", version))
+    .title(title)
     .theme(App::theme)
     .font(include_bytes!("Roboto-VariableFont_wdth,wght.ttf"))
     .font(include_bytes!("ui/icons/MaterialIcons-Regular.ttf"))
